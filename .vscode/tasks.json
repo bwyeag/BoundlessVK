@@ -3,17 +3,14 @@
     "tasks": [
         {
             "type": "shell",
-            "label": "C/C++: g++.exe build active file",
-            "command": "D:\\msys2\\mingw64\\bin\\g++.exe",
+            "label": "C/C++: cmake build file",
+            "command": "cmake",
             "args": [
-                "-g",
-                "${file}",
-                "-o",
-                "${fileDirname}\\${fileBasenameNoExtension}.exe"
+                "--build",
+                ".\\build\\"
             ],
-            "options": {
-                "cwd": "D:\\msys2\\mingw64\\bin"
-            },
+            // "options": {
+            // },
             "problemMatcher": [
                 "$gcc"
             ],

@@ -3,15 +3,14 @@
         {
             "name": "Win32",
             "includePath": [
-                "${workspaceFolder}/**",
-                "${workspaceFolder}/Boundless",
-                "D:\\vulkanSDK\\Include",
+                "${workspaceFolder}/inc/*",
+                "${workspaceFolder}/inc/BL",
                 "D:\\msys2\\mingw64\\include",
-                "D:\\c++programs\\assimp-5.3.1\\include"
+                "D:\\vulkanSDK\\Include"
             ],
-            // "defines": [
-            //     "NDEBUG"
-            // ],
+            "defines": [
+                "BL_DEBUG"
+            ],
             "compilerPath": "D:\\msys2\\mingw64\\bin\\g++.exe",
             "cStandard": "c11",
             "cppStandard": "c++20",
