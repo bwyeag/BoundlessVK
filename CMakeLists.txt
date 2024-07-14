@@ -9,8 +9,12 @@ add_executable(main ${SRC_FILE})
 
 find_package(Vulkan REQUIRED)
 add_subdirectory("inc\\glfw-3.3.8")
+set( GLFW_BUILD_DOCS OFF CACHE BOOL  "GLFW lib only" )
+set( GLFW_INSTALL OFF CACHE BOOL  "GLFW lib only" )
+
 target_link_libraries(main ${Vulkan_LIBRARIES})
 target_link_libraries(main glfw)
 target_include_directories(main PRIVATE inc/BL PRIVATE inc/ PUBLIC "D:\\vulkanSDK\\Include")
 
 target_compile_features(main PRIVATE cxx_std_20)
+add_compile_definitions(BL_DEBUG)
