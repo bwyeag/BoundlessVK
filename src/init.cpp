@@ -5,39 +5,39 @@ Context context;
  * 窗口相关函数
  */
 void setWindowInit(int w, int h, bool isFpsDisplayed) {
-    context.windowInfo.width = w;
-    context.windowInfo.height = h;
-    context.windowInfo.isFpsDisplayed = isFpsDisplayed;
+    auto& wInfo = context.windowInfo;
+    wInfo.width = w;
+    wInfo.height = h;
+    wInfo.isFpsDisplayed = isFpsDisplayed;
 }
 void setWindowTitle(const char* newTitle) {
-    context.windowInfo.pTitle = newTitle;
-    glfwSetWindowTitle(context.windowInfo.pWindow, newTitle);
+    auto& wInfo = context.windowInfo;
+    wInfo.pTitle = newTitle;
+    glfwSetWindowTitle(wInfo.pWindow, newTitle);
 }
 void calcFps() {
+    auto& wInfo = context.windowInfo;
     static double last_time = glfwGetTime();
     static double delta_time = 0.0;
     static uint32_t delta_frame = -1;
     static std::stringstream info;
-    context.windowInfo.lastTime = context.windowInfo.currentTime;
-    context.windowInfo.currentTime = glfwGetTime();
-    context.windowInfo.deltaTime =
-        context.windowInfo.currentTime - context.windowInfo.lastTime;
-    if (context.windowInfo.isFpsDisplayed) {
+    wInfo.lastTime = wInfo.currentTime;
+    wInfo.currentTime = glfwGetTime();
+    wInfo.deltaTime = wInfo.currentTime - wInfo.lastTime;
+    if (wInfo.isFpsDisplayed) {
         delta_frame++;
-        if ((delta_time = context.windowInfo.currentTime - last_time) >=
+        if ((delta_time = wInfo.currentTime - last_time) >=
             FPS_DISPLAY_DELTA_TIME) {
-            if (!context.windowInfo.isFullScreen) {
+            if (!wInfo.isFullScreen) {
                 info.precision(1);
-                info << context.windowInfo.pTitle << "  " << std::fixed
+                info << wInfo.pTitle << "  " << std::fixed
                      << delta_frame / delta_time << " FPS";
-                glfwSetWindowTitle(context.windowInfo.pWindow,
-                                   info.str().c_str());
+                glfwSetWindowTitle(wInfo.pWindow, info.str().c_str());
                 info.str("");
             } else {
-                glfwSetWindowTitle(context.windowInfo.pWindow,
-                                   context.windowInfo.pTitle);
+                glfwSetWindowTitle(wInfo.pWindow, wInfo.pTitle);
             }
-            last_time = context.windowInfo.currentTime;
+            last_time = wInfo.currentTime;
             delta_frame = 0;
         }
     }
@@ -47,25 +47,23 @@ bool initWindow(const char* title, bool fullScreen, bool isResizable) {
         print_error("InitWindow", "GLFW init failed!");
         return false;
     }
+    auto& wInfo = context.windowInfo;
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     glfwWindowHint(GLFW_RESIZABLE, isResizable);
-    context.windowInfo.pMonitor = glfwGetPrimaryMonitor();
-    context.windowInfo.pTitle = title;
+    wInfo.pMonitor = glfwGetPrimaryMonitor();
+    wInfo.pTitle = title;
     if (fullScreen) {
-        context.windowInfo.isFullScreen = true;
-        const GLFWvidmode* pMode =
-            glfwGetVideoMode(context.windowInfo.pMonitor);
-        context.windowInfo.width = pMode->width;
-        context.windowInfo.height = pMode->height;
-        context.windowInfo.pWindow =
-            glfwCreateWindow(pMode->width, pMode->height, title,
-                             context.windowInfo.pMonitor, nullptr);
+        wInfo.isFullScreen = true;
+        const GLFWvidmode* pMode = glfwGetVideoMode(wInfo.pMonitor);
+        wInfo.width = pMode->width;
+        wInfo.height = pMode->height;
+        wInfo.pWindow = glfwCreateWindow(pMode->width, pMode->height, title,
+                                         wInfo.pMonitor, nullptr);
     } else {
-        context.windowInfo.pWindow = glfwCreateWindow(context.windowInfo.width,
-                                                      context.windowInfo.height,
-                                                      title, nullptr, nullptr);
+        wInfo.pWindow = glfwCreateWindow(wInfo.width, wInfo.height, title,
+                                         nullptr, nullptr);
     }
-    if (!context.windowInfo.pWindow) {
+    if (!wInfo.pWindow) {
         print_error("InitWindow", "GLFW window create failed!");
         glfwTerminate();
         return false;
@@ -73,18 +71,22 @@ bool initWindow(const char* title, bool fullScreen, bool isResizable) {
     return true;
 }
 void setWindowFullSrceen() {
-    const GLFWvidmode* pMode = glfwGetVideoMode(context.windowInfo.pMonitor);
-    glfwSetWindowMonitor(context.windowInfo.pWindow,
-                         context.windowInfo.pMonitor, 0, 0, pMode->width,
+    auto& wInfo = context.windowInfo;
+    const GLFWvidmode* pMode = glfwGetVideoMode(wInfo.pMonitor);
+    glfwSetWindowMonitor(wInfo.pWindow, wInfo.pMonitor, 0, 0, pMode->width,
                          pMode->height, pMode->refreshRate);
+    recreateSwapchain();
 }
 void setWindowWindowed(int offsetX, int offsetY, int width, int height) {
-    const GLFWvidmode* pMode = glfwGetVideoMode(context.windowInfo.pMonitor);
-    glfwSetWindowMonitor(context.windowInfo.pWindow, nullptr, offsetX, offsetY,
-                         width, height, pMode->refreshRate);
+    auto& wInfo = context.windowInfo;
+    const GLFWvidmode* pMode = glfwGetVideoMode(wInfo.pMonitor);
+    glfwSetWindowMonitor(wInfo.pWindow, nullptr, offsetX, offsetY, width,
+                         height, pMode->refreshRate);
+    recreateSwapchain();
 }
 bool terminateWindow() {
-    glfwDestroyWindow(context.windowInfo.pWindow);
+    auto& wInfo = context.windowInfo;
+    glfwDestroyWindow(wInfo.pWindow);
     glfwTerminate();
     return true;
 }
@@ -103,10 +105,14 @@ bool initVulkan() {
     if (_createSurface()) {
         return false;
     }
-    if (_pickPhysicalDevice()) {
+    if (_selectPhysicalDevice()) {
         return false;
     }
-    if (_createDevice()) {
+    VmaAllocatorCreateFlags vma_flag;
+    if (_createDevice(&vma_flag)) {
+        return false;
+    }
+    if (_initVMA(vma_flag)) {
         return false;
     }
     if (_createSwapchain()) {
@@ -243,6 +249,7 @@ VkResult _getPhysicalDevices(
     return result;
 }
 VkResult _getQueueFamilyIndices(VkPhysicalDevice physicalDevice) {
+    auto& info = context.vulkanInfo;
     uint32_t queueFamilyCount = 0;
     vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount,
                                              nullptr);
@@ -258,10 +265,9 @@ VkResult _getQueueFamilyIndices(VkPhysicalDevice physicalDevice) {
                  supportPresentation = false,
                  supportCompute = queueFamilyPropertieses[i].queueFlags &
                                   VK_QUEUE_COMPUTE_BIT;
-        if (context.vulkanInfo.surface)
+        if (info.surface)
             if (VkResult result = vkGetPhysicalDeviceSurfaceSupportKHR(
-                    physicalDevice, i, context.vulkanInfo.surface,
-                    &supportPresentation)) {
+                    physicalDevice, i, info.surface, &supportPresentation)) {
                 print_error("InitVulkan",
                             "Failed to check physical device "
                             "surface support! Error code: ",
@@ -269,17 +275,16 @@ VkResult _getQueueFamilyIndices(VkPhysicalDevice physicalDevice) {
                 return result;
             }
         if (supportGraphics && supportCompute &&
-            (!context.vulkanInfo.surface || supportPresentation)) {
-            context.vulkanInfo.queueFamilyIndex_graphics =
-                context.vulkanInfo.queueFamilyIndex_compute = i;
-            if (context.vulkanInfo.surface)
-                context.vulkanInfo.queueFamilyIndex_presentation = i;
+            (!info.surface || supportPresentation)) {
+            info.queueFamilyIndex_graphics = info.queueFamilyIndex_compute = i;
+            if (info.surface)
+                info.queueFamilyIndex_presentation = i;
             return VK_SUCCESS;
         }
     }
     return VK_RESULT_MAX_ENUM;
 }
-VkResult _pickPhysicalDevice() {
+VkResult _selectPhysicalDevice() {
     std::vector<VkPhysicalDevice> avaliablePhyDevices;
     if (VkResult result = _getPhysicalDevices(avaliablePhyDevices)) {
         return result;
@@ -291,11 +296,49 @@ VkResult _pickPhysicalDevice() {
     }
     return VK_SUCCESS;
 }
-std::vector<const char*> _getDeviceExtension() {
-    std::vector<const char*> extensions {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
+const uint32_t vma_extcheck_count = 4;
+static const char* vma_extensions[vma_extcheck_count] = {
+    VK_KHR_MAINTENANCE_4_EXTENSION_NAME, VK_KHR_MAINTENANCE_5_EXTENSION_NAME,
+    VK_EXT_MEMORY_BUDGET_EXTENSION_NAME,
+    VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME};
+static const VmaAllocatorCreateFlagBits vma_ext_flag[vma_extcheck_count] = {
+    VMA_ALLOCATOR_CREATE_KHR_MAINTENANCE4_BIT,
+    VMA_ALLOCATOR_CREATE_KHR_MAINTENANCE5_BIT,
+    VMA_ALLOCATOR_CREATE_EXT_MEMORY_BUDGET_BIT,
+    VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT};
+std::vector<const char*> _selectDeviceExtensions(
+    const std::vector<VkExtensionProperties>& supported_ext) {
+    std::vector<const char*> extensions{"VK_KHR_swapchain"};
+    extensions.reserve(extensions.size() + supported_ext.size());
+    for (const VkExtensionProperties& it : supported_ext) {
+        for (uint32_t i = 0; i < vma_extcheck_count; i++) {
+            if (std::strcmp(vma_extensions[i], it.extensionName) == 0) {
+                extensions.push_back(it.extensionName);
+            }
+        }
+    }
     return extensions;
 }
-VkResult _createDevice() {
+std::vector<VkExtensionProperties> _getDeviceExtensions() {
+    auto& info = context.vulkanInfo;
+    std::vector<VkExtensionProperties> ext;
+    uint32_t ext_count = 0;
+    VkResult res = vkEnumerateDeviceExtensionProperties(info.phyDevice,nullptr, &ext_count, nullptr);
+    if (res!=VK_SUCCESS){
+        print_error("getDeviceExtensions","enumerate device ext failed!");
+    }
+    ext.resize(ext_count);
+    vkEnumerateDeviceExtensionProperties(info.phyDevice,nullptr, &ext_count, ext.data());
+    if constexpr (PRINT_DEVICE_EXTENSIONS) {
+        print_log("Info", "Supported Device Extensions list: count:", ext_count);
+        for (const VkExtensionProperties& it : ext) {
+            print_log("Info", '\t', it.extensionName);
+        }
+    }
+    return ext;
+}
+VkResult _createDevice(VmaAllocatorCreateFlags* out_flag) {
+    auto& info = context.vulkanInfo;
     float queuePriority = 1.0f;
     VkDeviceQueueCreateInfo queueCreateInfos[3] = {
         {.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
@@ -308,9 +351,9 @@ VkResult _createDevice() {
          .queueCount = 1,
          .pQueuePriorities = &queuePriority}};
     uint32_t queueCreateInfoCount = 0;
-    uint32_t& qInd_graphics = context.vulkanInfo.queueFamilyIndex_graphics;
-    uint32_t& qInd_compute = context.vulkanInfo.queueFamilyIndex_compute;
-    uint32_t& qInd_present = context.vulkanInfo.queueFamilyIndex_presentation;
+    uint32_t& qInd_graphics = info.queueFamilyIndex_graphics;
+    uint32_t& qInd_compute = info.queueFamilyIndex_compute;
+    uint32_t& qInd_present = info.queueFamilyIndex_presentation;
     if (qInd_graphics != VK_QUEUE_FAMILY_IGNORED)
         queueCreateInfos[queueCreateInfoCount++].queueFamilyIndex =
             qInd_graphics;
@@ -323,9 +366,11 @@ VkResult _createDevice() {
         queueCreateInfos[queueCreateInfoCount++].queueFamilyIndex =
             qInd_compute;
     VkPhysicalDeviceFeatures physicalDeviceFeatures;
-    vkGetPhysicalDeviceFeatures(context.vulkanInfo.phyDevice,
-                                &physicalDeviceFeatures);
-    auto deviceExtensions = _getDeviceExtension();
+    vkGetPhysicalDeviceFeatures(info.phyDevice, &physicalDeviceFeatures);
+    std::vector<VkExtensionProperties> supported_ext = _getDeviceExtensions();
+    std::vector<const char*> deviceExtensions =
+        _selectDeviceExtensions(supported_ext);
+    *out_flag = _getVMAflags(deviceExtensions);
     VkDeviceCreateInfo deviceCreateInfo = {
         .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
         .flags = 0,
@@ -334,9 +379,8 @@ VkResult _createDevice() {
         .enabledExtensionCount = uint32_t(deviceExtensions.size()),
         .ppEnabledExtensionNames = deviceExtensions.data(),
         .pEnabledFeatures = &physicalDeviceFeatures};
-    if (VkResult result =
-            vkCreateDevice(context.vulkanInfo.phyDevice, &deviceCreateInfo,
-                           nullptr, &context.vulkanInfo.device)) {
+    if (VkResult result = vkCreateDevice(info.phyDevice, &deviceCreateInfo,
+                                         nullptr, &info.device)) {
         print_error("InitVulkan",
                     "Failed to create a vulkan logical device! "
                     "Error code: ",
@@ -344,46 +388,40 @@ VkResult _createDevice() {
         return result;
     }
     if (qInd_graphics != VK_QUEUE_FAMILY_IGNORED)
-        vkGetDeviceQueue(context.vulkanInfo.device, qInd_graphics, 0,
-                         &context.vulkanInfo.queue_graphics);
+        vkGetDeviceQueue(info.device, qInd_graphics, 0, &info.queue_graphics);
     if (qInd_present != VK_QUEUE_FAMILY_IGNORED)
-        vkGetDeviceQueue(context.vulkanInfo.device, qInd_present, 0,
-                         &context.vulkanInfo.queue_presentation);
+        vkGetDeviceQueue(info.device, qInd_present, 0,
+                         &info.queue_presentation);
     if (qInd_compute != VK_QUEUE_FAMILY_IGNORED)
-        vkGetDeviceQueue(context.vulkanInfo.device, qInd_compute, 0,
-                         &context.vulkanInfo.queue_compute);
-    vkGetPhysicalDeviceProperties(context.vulkanInfo.phyDevice,
-                                  &context.vulkanInfo.phyDeviceProperties);
-    vkGetPhysicalDeviceMemoryProperties(
-        context.vulkanInfo.phyDevice,
-        &context.vulkanInfo.phyDeviceMemoryProperties);
-    print_log("Init",
-              "Renderer:", context.vulkanInfo.phyDeviceProperties.deviceName);
+        vkGetDeviceQueue(info.device, qInd_compute, 0, &info.queue_compute);
+    vkGetPhysicalDeviceProperties(info.phyDevice, &info.phyDeviceProperties);
+    vkGetPhysicalDeviceMemoryProperties(info.phyDevice,
+                                        &info.phyDeviceMemoryProperties);
+    print_log("Init", "Renderer:", info.phyDeviceProperties.deviceName);
     return VK_SUCCESS;
 }
 VkResult _getSurfaceFormats(std::vector<VkSurfaceFormatKHR>& formats) {
+    auto& info = context.vulkanInfo;
     uint32_t surfaceFormatCount;
     if (VkResult result = vkGetPhysicalDeviceSurfaceFormatsKHR(
-            context.vulkanInfo.phyDevice, context.vulkanInfo.surface,
-            &surfaceFormatCount, nullptr)) {
-        print_error("InitSwapChain",
+            info.phyDevice, info.surface, &surfaceFormatCount, nullptr)) {
+        print_error("getSurfaceFormats",
                     "Failed to get the count of surface "
                     "formats! Error code:",
                     int32_t(result));
         return result;
     }
     if (!surfaceFormatCount) {
-        print_error("InitSwapChain",
+        print_error("getSurfaceFormats",
                     "Failed to find any supported surface "
                     "format!");
         abort();
     }
     formats.resize(surfaceFormatCount);
     VkResult result = vkGetPhysicalDeviceSurfaceFormatsKHR(
-        context.vulkanInfo.phyDevice, context.vulkanInfo.surface,
-        &surfaceFormatCount, formats.data());
+        info.phyDevice, info.surface, &surfaceFormatCount, formats.data());
     if (result)
-        print_error("InitSwapChain",
+        print_error("getSurfaceFormats",
                     "Failed to get surface formats! Error "
                     "code:",
                     int32_t(result));
@@ -391,17 +429,17 @@ VkResult _getSurfaceFormats(std::vector<VkSurfaceFormatKHR>& formats) {
 }
 VkResult _createSwapchain(bool limitFrameRate,
                           VkSwapchainCreateFlagsKHR flags) {
+    auto& info = context.vulkanInfo;
     VkSurfaceCapabilitiesKHR surfaceCapabilities = {};
     if (VkResult result = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(
-            context.vulkanInfo.phyDevice, context.vulkanInfo.surface,
-            &surfaceCapabilities)) {
+            info.phyDevice, info.surface, &surfaceCapabilities)) {
         print_error(
             "createSwapchain",
             "Failed to get physical device surface capabilities!Error code:",
             int32_t(result));
         return result;
     }
-    auto& createInfo = context.vulkanInfo.swapchainCreateInfo;
+    auto& createInfo = info.swapchainCreateInfo;
     createInfo.minImageCount =
         surfaceCapabilities.minImageCount +
         (surfaceCapabilities.maxImageCount > surfaceCapabilities.minImageCount);
@@ -442,10 +480,12 @@ VkResult _createSwapchain(bool limitFrameRate,
         if (VkResult result = _getSurfaceFormats(availableFormats))
             return result;
     if (!createInfo.imageFormat)
-        if (_setSurfaceFormat({VK_FORMAT_R8G8B8A8_UNORM,
-                              VK_COLOR_SPACE_SRGB_NONLINEAR_KHR},availableFormats) &&
-            _setSurfaceFormat({VK_FORMAT_B8G8R8A8_UNORM,
-                              VK_COLOR_SPACE_SRGB_NONLINEAR_KHR},availableFormats)) {
+        if (_setSurfaceFormat(
+                {VK_FORMAT_R8G8B8A8_UNORM, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR},
+                availableFormats) &&
+            _setSurfaceFormat(
+                {VK_FORMAT_B8G8R8A8_UNORM, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR},
+                availableFormats)) {
             // 如果找不到上述图像格式和色彩空间的组合，那只能有什么用什么，采用availableSurfaceFormats中的第一组
             createInfo.imageFormat = availableFormats[0].format;
             createInfo.imageColorSpace = availableFormats[0].colorSpace;
@@ -456,8 +496,7 @@ VkResult _createSwapchain(bool limitFrameRate,
     // 指定呈现模式
     uint32_t surfacePresentModeCount;
     if (VkResult result = vkGetPhysicalDeviceSurfacePresentModesKHR(
-            context.vulkanInfo.phyDevice, context.vulkanInfo.surface,
-            &surfacePresentModeCount, nullptr)) {
+            info.phyDevice, info.surface, &surfacePresentModeCount, nullptr)) {
         print_error(
             "createSwapchain",
             "Failed to get the count of surface present modes! Error code:",
@@ -471,8 +510,8 @@ VkResult _createSwapchain(bool limitFrameRate,
     }
     std::vector<VkPresentModeKHR> surfacePresentModes(surfacePresentModeCount);
     if (VkResult result = vkGetPhysicalDeviceSurfacePresentModesKHR(
-            context.vulkanInfo.phyDevice, context.vulkanInfo.surface,
-            &surfacePresentModeCount, surfacePresentModes.data())) {
+            info.phyDevice, info.surface, &surfacePresentModeCount,
+            surfacePresentModes.data())) {
         print_error("createSwapchain",
                     "Failed to get surface present "
                     "modes! Error code:",
@@ -488,7 +527,7 @@ VkResult _createSwapchain(bool limitFrameRate,
             }
     createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
     createInfo.flags = flags;
-    createInfo.surface = context.vulkanInfo.surface;
+    createInfo.surface = info.surface;
     createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
     createInfo.clipped = VK_TRUE;
     if (VkResult result = _createSwapChain_Internal())
@@ -498,10 +537,10 @@ VkResult _createSwapchain(bool limitFrameRate,
     return VK_SUCCESS;
 }
 VkResult _createSwapChain_Internal() {
-    auto& createInfo = context.vulkanInfo.swapchainCreateInfo;
-    if (VkResult result =
-            vkCreateSwapchainKHR(context.vulkanInfo.device, &createInfo,
-                                 nullptr, &context.vulkanInfo.swapchain)) {
+    auto& info = context.vulkanInfo;
+    auto& createInfo = info.swapchainCreateInfo;
+    if (VkResult result = vkCreateSwapchainKHR(info.device, &createInfo,
+                                               nullptr, &info.swapchain)) {
         print_error("createSwapchain",
                     "Failed to create a swapchain! Error "
                     "code:",
@@ -510,24 +549,23 @@ VkResult _createSwapChain_Internal() {
     }
     uint32_t swapchainImageCount;
     if (VkResult result = vkGetSwapchainImagesKHR(
-            context.vulkanInfo.device, context.vulkanInfo.swapchain,
-            &swapchainImageCount, nullptr)) {
+            info.device, info.swapchain, &swapchainImageCount, nullptr)) {
         print_error("createSwapchain",
                     "Failed to get the count of swapchain images! Error code:",
                     int32_t(result));
         return result;
     }
-    context.vulkanInfo.swapchainImages.resize(swapchainImageCount);
+    info.swapchainImages.resize(swapchainImageCount);
     if (VkResult result = vkGetSwapchainImagesKHR(
-            context.vulkanInfo.device, context.vulkanInfo.swapchain,
-            &swapchainImageCount, context.vulkanInfo.swapchainImages.data())) {
+            info.device, info.swapchain, &swapchainImageCount,
+            info.swapchainImages.data())) {
         print_error(
             "createSwapchain",
             "Failed to get swapchain images! Error code:", int32_t(result));
         return result;
     }
 
-    context.vulkanInfo.swapchainImageViews.resize(swapchainImageCount);
+    info.swapchainImageViews.resize(swapchainImageCount);
     VkImageViewCreateInfo imageViewCreateInfo = {
         .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
         .viewType = VK_IMAGE_VIEW_TYPE_2D,
@@ -535,10 +573,10 @@ VkResult _createSwapChain_Internal() {
         //.components = {},//四个成员皆为VK_COMPONENT_SWIZZLE_IDENTITY
         .subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1}};
     for (size_t i = 0; i < swapchainImageCount; i++) {
-        imageViewCreateInfo.image = context.vulkanInfo.swapchainImages[i];
+        imageViewCreateInfo.image = info.swapchainImages[i];
         if (VkResult result =
-                vkCreateImageView(context.vulkanInfo.device, &imageViewCreateInfo, nullptr,
-                                  &context.vulkanInfo.swapchainImageViews[i])) {
+                vkCreateImageView(info.device, &imageViewCreateInfo, nullptr,
+                                  &info.swapchainImageViews[i])) {
             print_error("createSwapchain",
                         "Failed to create a swapchain image view! Error code:",
                         int32_t(result));
@@ -547,7 +585,9 @@ VkResult _createSwapChain_Internal() {
     }
     return VK_SUCCESS;
 }
-VkResult _setSurfaceFormat(VkSurfaceFormatKHR surfaceFormat,std::vector<VkSurfaceFormatKHR>& availableSurfaceFormats) {
+VkResult _setSurfaceFormat(
+    VkSurfaceFormatKHR surfaceFormat,
+    std::vector<VkSurfaceFormatKHR>& availableSurfaceFormats) {
     auto& createInfo = context.vulkanInfo.swapchainCreateInfo;
 
     bool formatIsAvailable = false;
@@ -574,14 +614,15 @@ VkResult _setSurfaceFormat(VkSurfaceFormatKHR surfaceFormat,std::vector<VkSurfac
         return VK_ERROR_FORMAT_NOT_SUPPORTED;
     // 如果交换链已存在，重建交换链
     if (context.vulkanInfo.swapchain)
-        return _recreateSwapchain();
+        return recreateSwapchain();
     return VK_SUCCESS;
 }
-VkResult _recreateSwapchain() {
-    auto& createInfo = context.vulkanInfo.swapchainCreateInfo;
+VkResult recreateSwapchain() {
+    auto& info = context.vulkanInfo;
+    auto& createInfo = info.swapchainCreateInfo;
     VkSurfaceCapabilitiesKHR surfaceCapabilities = {};
     if (VkResult result = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(
-            context.vulkanInfo.phyDevice, context.vulkanInfo.surface, &surfaceCapabilities)) {
+            info.phyDevice, info.surface, &surfaceCapabilities)) {
         print_error(
             "recreateSwapchain",
             "Failed to get physical device surface capabilities! Error code:",
@@ -592,12 +633,11 @@ VkResult _recreateSwapchain() {
         surfaceCapabilities.currentExtent.height == 0)
         return VK_SUBOPTIMAL_KHR;
     createInfo.imageExtent = surfaceCapabilities.currentExtent;
-    createInfo.oldSwapchain = context.vulkanInfo.swapchain;
-    VkResult result = vkQueueWaitIdle(context.vulkanInfo.queue_graphics);
+    createInfo.oldSwapchain = info.swapchain;
+    VkResult result = vkQueueWaitIdle(info.queue_graphics);
     // 仅在等待图形队列成功，且图形与呈现所用队列不同时等待呈现队列
-    if (!result && context.vulkanInfo.queue_graphics !=
-                       context.vulkanInfo.queue_presentation)
-        result = vkQueueWaitIdle(context.vulkanInfo.queue_presentation);
+    if (!result && info.queue_graphics != info.queue_presentation)
+        result = vkQueueWaitIdle(info.queue_presentation);
     if (result) {
         print_error("recreateSwapchain",
                     "Failed to wait for the queue to be idle! Error code:",
@@ -606,10 +646,10 @@ VkResult _recreateSwapchain() {
     }
     for (auto& i : context.callbacks_destroySwapchain)
         i();
-    for (auto& i : context.vulkanInfo.swapchainImageViews)
+    for (auto& i : info.swapchainImageViews)
         if (i)
-            vkDestroyImageView(context.vulkanInfo.device, i, nullptr);
-    context.vulkanInfo.swapchainImageViews.resize(0);
+            vkDestroyImageView(info.device, i, nullptr);
+    info.swapchainImageViews.resize(0);
     if (result = _createSwapChain_Internal())
         return result;
     for (auto& i : context.callbacks_createSwapchain)
@@ -617,39 +657,85 @@ VkResult _recreateSwapchain() {
     return VK_SUCCESS;
 }
 void terminateVulkan() {
-    if (!context.vulkanInfo.instance)
+    _destroyHandles();
+    _clearHandles();
+    return;
+}
+void _destroyHandles() {
+    auto& info = context.vulkanInfo;
+    if (!info.instance)
         return;
-    if (context.vulkanInfo.device) {
-        vkDeviceWaitIdle(context.vulkanInfo.device);
-        if (context.vulkanInfo.swapchain) {
+    if (info.device) {
+        vkDeviceWaitIdle(info.device);
+        _terminateVMA();
+        if (info.swapchain) {
             for (auto& i : context.callbacks_destroySwapchain)
                 i();
-            for (auto& i : context.vulkanInfo.swapchainImageViews)
+            for (auto& i : info.swapchainImageViews)
                 if (i)
-                    vkDestroyImageView(context.vulkanInfo.device, i, nullptr);
-            vkDestroySwapchainKHR(context.vulkanInfo.device, context.vulkanInfo.swapchain, nullptr);
+                    vkDestroyImageView(info.device, i, nullptr);
+            vkDestroySwapchainKHR(info.device, info.swapchain, nullptr);
         }
-        vkDestroyDevice(context.vulkanInfo.device, nullptr);
+        vkDestroyDevice(info.device, nullptr);
     }
-    if (context.vulkanInfo.surface)
-        vkDestroySurfaceKHR(context.vulkanInfo.instance, context.vulkanInfo.surface, nullptr);
-    if (context.vulkanInfo.debugger) {
+    if (info.surface)
+        vkDestroySurfaceKHR(info.instance, info.surface, nullptr);
+    if (info.debugger) {
         PFN_vkDestroyDebugUtilsMessengerEXT DestroyDebugUtilsMessenger =
-            reinterpret_cast<PFN_vkDestroyDebugUtilsMessengerEXT>(vkGetInstanceProcAddr(context.vulkanInfo.instance, "vkDestroyDebugUtilsMessengerEXT"));
+            reinterpret_cast<PFN_vkDestroyDebugUtilsMessengerEXT>(
+                vkGetInstanceProcAddr(info.instance,
+                                      "vkDestroyDebugUtilsMessengerEXT"));
         if (DestroyDebugUtilsMessenger)
-            DestroyDebugUtilsMessenger(context.vulkanInfo.instance, context.vulkanInfo.debugger, nullptr);
+            DestroyDebugUtilsMessenger(info.instance, info.debugger, nullptr);
     }
-    vkDestroyInstance(context.vulkanInfo.instance, nullptr);
-
-    context.vulkanInfo.instance = VK_NULL_HANDLE;
-    context.vulkanInfo.phyDevice = VK_NULL_HANDLE;
-    context.vulkanInfo.device = VK_NULL_HANDLE;
-    context.vulkanInfo.surface = VK_NULL_HANDLE;
-    context.vulkanInfo.swapchain = VK_NULL_HANDLE;
-    context.vulkanInfo.swapchainImages.resize(0);
-    context.vulkanInfo.swapchainImageViews.resize(0);
-    context.vulkanInfo.swapchainCreateInfo = {};
-    context.vulkanInfo.debugger = VK_NULL_HANDLE;
-    return;
+    vkDestroyInstance(info.instance, nullptr);
+}
+void _clearHandles() {
+    auto& info = context.vulkanInfo;
+    info.instance = VK_NULL_HANDLE;
+    info.phyDevice = VK_NULL_HANDLE;
+    info.device = VK_NULL_HANDLE;
+    info.surface = VK_NULL_HANDLE;
+    info.swapchain = VK_NULL_HANDLE;
+    info.swapchainImages.resize(0);
+    info.swapchainImageViews.resize(0);
+    info.swapchainCreateInfo = {};
+    info.debugger = VK_NULL_HANDLE;
+}
+/*
+ * VMA 相关函数
+ */
+VmaAllocatorCreateFlags _getVMAflags(const std::vector<const char*>& ext) {
+    VmaAllocatorCreateFlags flag = 0;
+    for (uint32_t i = 0; i < ext.size(); i++) {
+        for (uint32_t j = 0; j < vma_extcheck_count; j++) {
+            if (std::strcmp(ext[i], vma_extensions[j]) == 0) {
+                flag |= vma_ext_flag[j];
+                print_log("Info", "VMA ext found:", ext[i]);
+            }
+        }
+    }
+    return flag;
+}
+VkResult _initVMA(VmaAllocatorCreateFlags flag) {
+    auto& info = context.vulkanInfo;
+    VmaAllocatorCreateInfo create_info = {};
+    create_info.flags = flag;
+    create_info.vulkanApiVersion = VK_API_VERSION_1_3;
+    create_info.instance = info.instance;
+    create_info.device = info.device;
+    create_info.physicalDevice = info.phyDevice;
+    VkResult res = vmaCreateAllocator(&create_info, &info.allocator);
+    if (res != VK_SUCCESS) {
+        print_error("InitVMA",
+                    "vma allocator create failed! Error Code:", int32_t(res));
+        return res;
+    }
+    print_log("Info", "VMA create successfull.");
+    return VK_SUCCESS;
+}
+void _terminateVMA() {
+    auto& info = context.vulkanInfo;
+    vmaDestroyAllocator(info.allocator);
 }
 }  // namespace BL
