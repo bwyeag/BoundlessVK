@@ -3,6 +3,7 @@ namespace BL {
 const VkExtent2D& window_size =
     context.vulkanInfo.swapchainCreateInfo.imageExtent;
 RenderPassPack* pRenderpass_pack;
+RenderPipeline* pRenderPipeline;
 RenderContext::RenderContext(uint32_t c)
     : maxFlightCount(c),
       curFrame(0),
@@ -20,10 +21,119 @@ RenderContext::RenderContext(uint32_t c)
 void initRenderLoop() {
     context.renderInfo = new RenderContext(DEFAULT_MAX_FLIGHT_COUNT);
     pRenderpass_pack = new RenderPassPack();
+    pRenderPipeline = new RenderPipeline();
 }
 void terminateRenderLoop() {
+    delete pRenderPipeline;
     delete pRenderpass_pack;
     delete context.renderInfo;
+}
+VkResult createRenderContext() {
+    context.renderContext = new RenderContextPlus();
+    auto& info = context.vulkanInfo;
+    auto& render_context = *context.renderContext;
+    VkResult result;
+    if (info.queueFamilyIndex_graphics != VK_QUEUE_FAMILY_IGNORED) {
+        result = render_context.cmdPool_graphics.create(
+            info.queueFamilyIndex_graphics,
+            VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
+        if (result) {
+            destroyRenderContext();
+            return result;
+        }
+        result = render_context.cmdPool_graphics.allocate_buffer(
+            &render_context.cmdBuffer_transfer);
+        if (result) {
+            destroyRenderContext();
+            return result;
+        }
+    }
+    if (info.queue_compute != VK_QUEUE_FAMILY_IGNORED) {
+        result = render_context.cmdPool_compute.create(
+            info.queue_compute,
+            VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
+        if (result) {
+            destroyRenderContext();
+            return result;
+        }
+    }
+    if (info.queueFamilyIndex_presentation != VK_QUEUE_FAMILY_IGNORED &&
+        info.queueFamilyIndex_presentation != info.queueFamilyIndex_graphics &&
+        info.swapchainCreateInfo.imageSharingMode ==
+            VK_SHARING_MODE_EXCLUSIVE) {
+        result = render_context.cmdPool_presentation.create(
+            info.queueFamilyIndex_presentation,
+            VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
+        if (result) {
+            destroyRenderContext();
+            return result;
+        }
+        result = render_context.cmdPool_presentation.allocate_buffer(
+            &render_context.cmdBuffer_presentation);
+        if (result) {
+            destroyRenderContext();
+            return result;
+        }
+    }
+    return VK_SUCCESS;
+}
+VkResult execute_cmdBuffer_graphics_wait(VkCommandBuffer commandBuffer) {
+    Fence fence;
+    VkResult result;
+    result = execute_cmdBuffer_graphics(commandBuffer, fence);
+    if (result)
+        return result;
+    else
+        return fence.wait();
+}
+VkResult execute_cmdBuffer_graphics(VkCommandBuffer commandBuffer,
+                                    Fence& fence) {
+    VkSubmitInfo submitInfo = {.commandBufferCount = 1,
+                               .pCommandBuffers = &commandBuffer};
+    VkResult result =
+        vkQueueSubmit(context.vulkanInfo.queue_graphics, 1, &submitInfo, fence);
+    if (result) {
+        print_error("execute_cmdBuffer_graphics",
+                    "submit failed! Code:", int32_t(result));
+        return result;
+    }
+    return VK_SUCCESS;
+}
+// void CmdTransferImageOwnership(VkCommandBuffer commandBuffer) const {
+//     VkImageMemoryBarrier imageMemoryBarrier_g2p = {
+//         .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+//         .srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+//         .dstAccessMask = 0,
+//         .oldLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+//         .newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+//         .srcQueueFamilyIndex = queueFamilyIndex_graphics,
+//         .dstQueueFamilyIndex = queueFamilyIndex_presentation,
+//         .image = swapchainImages[currentImageIndex],
+//         .subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 }
+//     };
+//     vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0,
+//         0, nullptr, 0, nullptr, 1, &imageMemoryBarrier_g2p);
+// }
+// VkResult AcquireImageOwnership_Presentation(
+//     VkSemaphore semaphore_renderingIsOver,
+//     VkSemaphore semaphore_ownershipIsTransfered,
+//     VkFence fence = VK_NULL_HANDLE) const {
+//     if (VkResult result = commandBuffer_presentation.Begin(
+//             VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT))
+//         return result;
+//     graphicsBase::Base().CmdTransferImageOwnership(commandBuffer_presentation);
+//     if (VkResult result = commandBuffer_presentation.End())
+//         return result;
+//     return graphicsBase::Base().SubmitCommandBuffer_Presentation(
+//         commandBuffer_presentation, semaphore_renderingIsOver,
+//         semaphore_ownershipIsTransfered, fence);
+// }
+void destroyRenderContext() {
+    auto& render_context = *context.renderContext;
+    render_context.cmdPool_presentation.~CommandPool();
+    render_context.cmdPool_graphics.~CommandPool();
+    render_context.cmdPool_compute.~CommandPool();
+    delete context.renderContext;
 }
 void renderLoop() {
     auto& vkInfo = context.vulkanInfo;
@@ -69,13 +179,13 @@ void renderLoop() {
     }
     VkClearValue clearColor = {.color = {1.f, 0.f, 0.f, 1.f}};  // 红色
     curBuf.begin(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
-    /*
-     * do something
-     */
+
     pRenderpass_pack->renderPass.cmd_begin(
         curBuf, pRenderpass_pack->framebuffers[loop.curFrame],
         {{}, window_size}, &clearColor, 1);
-    /*渲染命令，待填充*/
+    vkCmdBindPipeline(curBuf, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                      VkPipeline(pRenderPipeline->renderPipeline));
+    vkCmdDraw(curBuf, 3, 1, 0, 0);
     pRenderpass_pack->renderPass.cmd_end(curBuf);
 
     curBuf.end();
@@ -120,13 +230,15 @@ void renderLoop() {
             recreateSwapchain();
             break;
         default:
-            print_error("renderLoop()","Failed to queue the image for presentation! Code:",int32_t(result));
+            print_error("renderLoop()",
+                        "Failed to queue the image for presentation! Code:",
+                        int32_t(result));
             break;
     }
     // 切换到下一帧
     loop.curFrame = (loop.curFrame + 1) % loop.maxFlightCount;
 }
-RenderPassPack::RenderPassPack() {
+void RenderPassPack::create() {
     VkAttachmentDescription attachmentDescription = {
         .format = context.vulkanInfo.swapchainCreateInfo.imageFormat,
         .samples = VK_SAMPLE_COUNT_1_BIT,
@@ -178,8 +290,32 @@ RenderPassPack::RenderPassPack() {
     callback_c_id = addCallback_CreateSwapchain(CreateFramebuffers);
     callback_d_id = addCallback_DestroySwapchain(DestroyFramebuffers);
 }
-RenderPassPack::~RenderPassPack() {
-    removeCallback_CreateSwapchain(callback_c_id);
-    removeCallback_DestroySwapchain(callback_d_id);
+void RenderPipeline::create() {
+    shader.create(
+        "D:\\c++programs\\BoundlessVK\\BoundlessVK\\shader\\shader.shader");
+    auto Create = [this] {
+        VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo{
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
+        layout.create(pipelineLayoutCreateInfo);
+        PipelineCreateInfosPack pack;
+        pack.createInfo.layout = VkPipelineLayout(layout);
+        pack.createInfo.renderPass = VkRenderPass(pRenderpass_pack->renderPass);
+        pack.inputAssemblyStateCi.topology =
+            VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+        pack.viewports.emplace_back(0.0f, 0.0f, float(window_size.width),
+                                    float(window_size.height), 0.f, 1.f);
+        pack.scissors.emplace_back(VkOffset2D{}, window_size);
+        pack.multisampleStateCi.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+        pack.colorBlendAttachmentStates.push_back(
+            VkPipelineColorBlendAttachmentState{.colorWriteMask = 0b1111});
+        pack.update_all_arrays();
+        pack.createInfo.stageCount = shader.getStages().size();
+        pack.createInfo.pStages = shader.getStages().data();
+        renderPipeline.create(pack);
+    };
+    auto Destroy = [this] { renderPipeline.~Pipeline(); };
+    callback_c_id = addCallback_CreateSwapchain(Create);
+    callback_d_id = addCallback_DestroySwapchain(Destroy);
+    Create();
 }
 }  // namespace BL

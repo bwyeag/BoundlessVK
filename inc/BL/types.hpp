@@ -8,18 +8,18 @@ namespace BL {
 /*
  * Vulkan类型封装
  */
-class fence {
+class Fence {
     VkFence handle = VK_NULL_HANDLE;
 
    public:
-    fence(VkFenceCreateInfo& createInfo) { create(createInfo); }
+    Fence(VkFenceCreateInfo& createInfo) { create(createInfo); }
     // 默认构造器创建未置位的栅栏
-    fence(VkFenceCreateFlags flags = 0) { create(flags); }
-    fence(fence&& other) noexcept {
+    Fence(VkFenceCreateFlags flags = 0) { create(flags); }
+    Fence(Fence&& other) noexcept {
         handle = other.handle;
         other.handle = VK_NULL_HANDLE;
     }
-    ~fence() { vkDestroyFence(context.vulkanInfo.device, handle, nullptr); }
+    ~Fence() { vkDestroyFence(context.vulkanInfo.device, handle, nullptr); }
     operator VkFence() { return handle; }
     VkFence* getPointer() { return &handle; }
     VkResult wait(uint64_t time = UINT64_MAX) const {
@@ -64,17 +64,17 @@ class fence {
         return create(createInfo);
     }
 };
-class semaphore {
+class Semaphore {
     VkSemaphore handle = VK_NULL_HANDLE;
 
    public:
-    semaphore(VkSemaphoreCreateInfo& createInfo) { create(createInfo); }
-    semaphore() { create(); }
-    semaphore(semaphore&& other) noexcept {
+    Semaphore(VkSemaphoreCreateInfo& createInfo) { create(createInfo); }
+    Semaphore() { create(); }
+    Semaphore(Semaphore&& other) noexcept {
         handle = other.handle;
         other.handle = VK_NULL_HANDLE;
     }
-    ~semaphore() {
+    ~Semaphore() {
         vkDestroySemaphore(context.vulkanInfo.device, handle, nullptr);
     }
     operator VkSemaphore() { return handle; }
@@ -93,13 +93,13 @@ class semaphore {
         return create(createInfo);
     }
 };
-class commandBuffer {
-    friend class commandPool;
+class CommandBuffer {
+    friend class CommandPool;
     VkCommandBuffer handle = VK_NULL_HANDLE;
 
    public:
-    commandBuffer() = default;
-    commandBuffer(commandBuffer&& other) noexcept {
+    CommandBuffer() = default;
+    CommandBuffer(CommandBuffer&& other) noexcept {
         handle = other.handle;
         other.handle = VK_NULL_HANDLE;
     }
@@ -142,26 +142,28 @@ class commandBuffer {
         return result;
     }
 };
-class commandPool {
+class CommandPool {
     VkCommandPool handle = VK_NULL_HANDLE;
 
    public:
-    commandPool() = default;
-    commandPool(VkCommandPoolCreateInfo& createInfo) { create(createInfo); }
-    commandPool(uint32_t queueFamilyIndex, VkCommandPoolCreateFlags flags = 0) {
+    CommandPool() = default;
+    CommandPool(VkCommandPoolCreateInfo& createInfo) { create(createInfo); }
+    CommandPool(uint32_t queueFamilyIndex, VkCommandPoolCreateFlags flags = 0) {
         create(queueFamilyIndex, flags);
     }
-    commandPool(commandPool&& other) noexcept {
+    CommandPool(CommandPool&& other) noexcept {
         handle = other.handle;
         other.handle = VK_NULL_HANDLE;
     }
-    ~commandPool() {
-        vkDestroyCommandPool(context.vulkanInfo.device, handle, nullptr);
+    ~CommandPool() {
+        if (handle)
+            vkDestroyCommandPool(context.vulkanInfo.device, handle, nullptr);
+        handle = VK_NULL_HANDLE;
     }
     operator VkCommandPool() { return handle; }
     VkCommandPool* getPointer() { return &handle; }
     VkResult allocate_buffer(
-        commandBuffer* pBuffer,
+        CommandBuffer* pBuffer,
         VkCommandBufferLevel level = VK_COMMAND_BUFFER_LEVEL_PRIMARY) const {
         VkCommandBufferAllocateInfo allocateInfo = {
             .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
@@ -178,7 +180,7 @@ class commandPool {
         return result;
     }
     VkResult allocate_buffers(
-        commandBuffer* pBuffers,
+        CommandBuffer* pBuffers,
         uint32_t count,
         VkCommandBufferLevel level = VK_COMMAND_BUFFER_LEVEL_PRIMARY) const {
         VkCommandBufferAllocateInfo allocateInfo = {
@@ -195,12 +197,12 @@ class commandPool {
         }
         return result;
     }
-    void free_buffer(commandBuffer* pBuffer) const {
+    void free_buffer(CommandBuffer* pBuffer) const {
         vkFreeCommandBuffers(context.vulkanInfo.device, handle, 1,
                              (VkCommandBuffer*)pBuffer);
         pBuffer->handle = VK_NULL_HANDLE;
     }
-    void free_buffers(commandBuffer* pBuffers, uint32_t count) const {
+    void free_buffers(CommandBuffer* pBuffers, uint32_t count) const {
         vkFreeCommandBuffers(context.vulkanInfo.device, handle, count,
                              (VkCommandBuffer*)pBuffers);
         std::memset(pBuffers, 0, sizeof(VkCommandBuffer) * count);
@@ -222,18 +224,20 @@ class commandPool {
         return create(createInfo);
     }
 };
-class renderPass {
+class RenderPass {
     VkRenderPass handle = VK_NULL_HANDLE;
 
    public:
-    renderPass() = default;
-    renderPass(VkRenderPassCreateInfo& createInfo) { create(createInfo); }
-    renderPass(renderPass&& other) noexcept {
+    RenderPass() = default;
+    RenderPass(VkRenderPassCreateInfo& createInfo) { create(createInfo); }
+    RenderPass(RenderPass&& other) noexcept {
         handle = other.handle;
         other.handle = VK_NULL_HANDLE;
     }
-    ~renderPass() {
-        vkDestroyRenderPass(context.vulkanInfo.device, handle, nullptr);
+    ~RenderPass() {
+        if (handle)
+            vkDestroyRenderPass(context.vulkanInfo.device, handle, nullptr);
+        handle = VK_NULL_HANDLE;
     }
     operator VkRenderPass() { return handle; }
     VkRenderPass* getPointer() { return &handle; }
@@ -280,18 +284,20 @@ class renderPass {
         return result;
     }
 };
-class framebuffer {
+class Framebuffer {
     VkFramebuffer handle = VK_NULL_HANDLE;
 
    public:
-    framebuffer() = default;
-    framebuffer(VkFramebufferCreateInfo& createInfo) { create(createInfo); }
-    framebuffer(framebuffer&& other) noexcept {
+    Framebuffer() = default;
+    Framebuffer(VkFramebufferCreateInfo& createInfo) { create(createInfo); }
+    Framebuffer(Framebuffer&& other) noexcept {
         handle = other.handle;
         other.handle = VK_NULL_HANDLE;
     }
-    ~framebuffer() {
-        vkDestroyFramebuffer(context.vulkanInfo.device, handle, nullptr);
+    ~Framebuffer() {
+        if (handle)
+            vkDestroyFramebuffer(context.vulkanInfo.device, handle, nullptr);
+        handle = VK_NULL_HANDLE;
     }
     operator VkFramebuffer() { return handle; }
     VkFramebuffer* getPointer() { return &handle; }
@@ -305,7 +311,7 @@ class framebuffer {
         return result;
     }
 };
-struct pipelineCreateInfosPack {
+struct PipelineCreateInfosPack {
     VkGraphicsPipelineCreateInfo createInfo = {
         VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO};
     std::vector<VkPipelineShaderStageCreateInfo> shaderStages;
@@ -346,11 +352,11 @@ struct pipelineCreateInfosPack {
         VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO};
     std::vector<VkDynamicState> dynamicStates;
     //--------------------
-    pipelineCreateInfosPack() {
+    PipelineCreateInfosPack() {
         set_create_infos();
         createInfo.basePipelineIndex = -1;
     }
-    pipelineCreateInfosPack(const pipelineCreateInfosPack& other) noexcept {
+    PipelineCreateInfosPack(const PipelineCreateInfosPack& other) noexcept {
         createInfo = other.createInfo;
         set_create_infos();
 
@@ -418,27 +424,57 @@ struct pipelineCreateInfosPack {
         dynamicStateCi.pDynamicStates = dynamicStates.data();
     }
 };
-class pipeline {
-    VkPipeline handle = VK_NULL_HANDLE;
+class PipelineLayout {
+    VkPipelineLayout handle = VK_NULL_HANDLE;
 
    public:
-    pipeline() = default;
-    pipeline(VkGraphicsPipelineCreateInfo& createInfo) { create(createInfo); }
-    pipeline(VkComputePipelineCreateInfo& createInfo) { create(createInfo); }
-    pipeline(pipeline&& other) noexcept {
+    PipelineLayout() = default;
+    PipelineLayout(VkPipelineLayoutCreateInfo& createInfo) {
+        create(createInfo);
+    }
+    PipelineLayout(PipelineLayout&& other) noexcept {
         handle = other.handle;
         other.handle = VK_NULL_HANDLE;
     }
-    ~pipeline() {
+    ~PipelineLayout() {
+        if (handle)
+            vkDestroyPipelineLayout(context.vulkanInfo.device, handle, nullptr);
+        handle = VK_NULL_HANDLE;
+    }
+    operator VkPipelineLayout() { return handle; }
+    VkPipelineLayout* getPointer() { return &handle; }
+
+    VkResult create(VkPipelineLayoutCreateInfo& createInfo) {
+        VkResult result = vkCreatePipelineLayout(context.vulkanInfo.device,
+                                                 &createInfo, nullptr, &handle);
+        if (result) {
+            print_error(
+                "pipelineLayout",
+                "create pipelineLayout failed! Code: ", int32_t(result));
+        }
+        return result;
+    }
+};
+class Pipeline {
+    VkPipeline handle = VK_NULL_HANDLE;
+
+   public:
+    Pipeline() = default;
+    Pipeline(VkGraphicsPipelineCreateInfo& createInfo) { create(createInfo); }
+    Pipeline(VkComputePipelineCreateInfo& createInfo) { create(createInfo); }
+    Pipeline(Pipeline&& other) noexcept {
+        handle = other.handle;
+        other.handle = VK_NULL_HANDLE;
+    }
+    ~Pipeline() {
         vkDestroyPipeline(context.vulkanInfo.device, handle, nullptr);
     }
     operator VkPipeline() { return handle; }
     VkPipeline* getPointer() { return &handle; }
     VkResult create(VkGraphicsPipelineCreateInfo& createInfo) {
-        createInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-        VkResult result = vkCreateGraphicsPipelines(
-            graphicsBase::Base().Device(), VK_NULL_HANDLE, 1, &createInfo,
-            nullptr, &handle);
+        VkResult result =
+            vkCreateGraphicsPipelines(context.vulkanInfo.device, VK_NULL_HANDLE,
+                                      1, &createInfo, nullptr, &handle);
         if (result) {
             print_error(
                 "pipeline",
@@ -447,14 +483,13 @@ class pipeline {
         return result;
     }
     VkResult create(VkComputePipelineCreateInfo& createInfo) {
-        createInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
-        VkResult result = vkCreateComputePipelines(
-            graphicsBase::Base().Device(), VK_NULL_HANDLE, 1, &createInfo,
-            nullptr, &handle);
+        VkResult result =
+            vkCreateComputePipelines(context.vulkanInfo.device, VK_NULL_HANDLE,
+                                     1, &createInfo, nullptr, &handle);
         if (result) {
             print_error(
                 "pipeline",
-                "Failed to create a graphics pipeline! Code:", int32_t(result));
+                "Failed to create a compute pipeline! Code:", int32_t(result));
         }
 
         return result;
