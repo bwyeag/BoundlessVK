@@ -1,75 +1,10 @@
 #ifndef BOUNDLESS_TYPES_FILE
 #define BOUNDLESS_TYPES_FILE
-#include <cstdint>
 #include <vulkan/vulkan.h>
+#include <cstdint>
 #include "init.hpp"
 #include "log.hpp"
 namespace BL {
-/*
- * 文件格式定义
- */
-struct Range {
-    uint32_t offset, length; /*以byte计算的偏移及长度*/
-};
-const uint32_t SHADER_HEAD_CODE = 0x240501CF;
-struct ShaderFileHead {
-    struct Part {
-        uint32_t start;
-        uint32_t length;
-        alignas(4) VkShaderStageFlagBits stage;
-    };
-    uint32_t _head;
-    uint32_t partCount;
-    Part parts[];
-};
-const uint32_t MESH_HEAD_CODE = 0x240720FE;
-struct MeshFileHead {
-    struct VertexAttr {
-        alignas(4) VkFormat format;
-        uint32_t location;
-        uint32_t offset;
-    };
-    struct BufferInfo {
-        uint32_t binding;
-        uint32_t stride;
-        alignas(4) VkVertexInputRate rate;
-        Range data;  // 压缩数据
-        Range attr;  // 以索引计算的参数
-    };
-    uint32_t _head;
-    uint32_t nameLen;
-    char name[64];
-    VkPrimitiveTopology topology;
-    VkIndexType indexType;
-    uint32_t vertexCount;
-    uint32_t indexCount; /*保证含有index*/
-    uint32_t restartEnable;
-    uint32_t restartIndex;
-
-    Range vertexBuffers;  // 指向一些BufferInfo
-    Range indexBuffer;    // 指向索引缓冲， 压缩
-    Range vertexAttrs;    // 指向顶点参数
-
-    std::string getName() {
-        std::string res;
-        res.resize(nameLen);
-        memcpy(res.data(), name, nameLen);
-        return res;
-    }
-    void setName(const char* n) {
-        uint32_t i = 0;
-        while (i < 64) {
-            if (name[i] == '\0')
-                break;
-            else
-                name[i] = n[i], i++;
-        }
-        nameLen = i;
-        do {
-            name[i] = '\0', i++;
-        } while (i < 64);
-    }
-};
 /*
  * Vulkan类型封装
  */
@@ -86,7 +21,7 @@ class fence {
     }
     ~fence() { vkDestroyFence(context.vulkanInfo.device, handle, nullptr); }
     operator VkFence() { return handle; }
-    VkFence* getPointer() {return &handle;}
+    VkFence* getPointer() { return &handle; }
     VkResult wait(uint64_t time = UINT64_MAX) const {
         VkResult result =
             vkWaitForFences(context.vulkanInfo.device, 1, &handle, false, time);
@@ -124,8 +59,8 @@ class fence {
         return result;
     }
     VkResult create(VkFenceCreateFlags flags = 0) {
-        VkFenceCreateInfo createInfo = {.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
-            .flags = flags};
+        VkFenceCreateInfo createInfo = {
+            .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO, .flags = flags};
         return create(createInfo);
     }
 };
@@ -143,7 +78,7 @@ class semaphore {
         vkDestroySemaphore(context.vulkanInfo.device, handle, nullptr);
     }
     operator VkSemaphore() { return handle; }
-    VkSemaphore* getPointer() {return &handle;}
+    VkSemaphore* getPointer() { return &handle; }
     VkResult create(VkSemaphoreCreateInfo& createInfo) {
         VkResult result = vkCreateSemaphore(context.vulkanInfo.device,
                                             &createInfo, nullptr, &handle);
@@ -169,7 +104,7 @@ class commandBuffer {
         other.handle = VK_NULL_HANDLE;
     }
     operator VkCommandBuffer() { return handle; }
-    VkCommandBuffer* getPointer() {return &handle;}
+    VkCommandBuffer* getPointer() { return &handle; }
     VkResult begin(VkCommandBufferUsageFlags usageFlags,
                    VkCommandBufferInheritanceInfo& inheritanceInfo) const {
         VkCommandBufferBeginInfo beginInfo = {
@@ -224,7 +159,7 @@ class commandPool {
         vkDestroyCommandPool(context.vulkanInfo.device, handle, nullptr);
     }
     operator VkCommandPool() { return handle; }
-    VkCommandPool* getPointer() {return &handle;}
+    VkCommandPool* getPointer() { return &handle; }
     VkResult allocate_buffer(
         commandBuffer* pBuffer,
         VkCommandBufferLevel level = VK_COMMAND_BUFFER_LEVEL_PRIMARY) const {
@@ -301,7 +236,7 @@ class renderPass {
         vkDestroyRenderPass(context.vulkanInfo.device, handle, nullptr);
     }
     operator VkRenderPass() { return handle; }
-    VkRenderPass* getPointer() {return &handle;}
+    VkRenderPass* getPointer() { return &handle; }
     void cmd_begin(
         VkCommandBuffer commandBuffer,
         VkRenderPassBeginInfo& beginInfo,
@@ -354,12 +289,12 @@ class framebuffer {
     framebuffer(framebuffer&& other) noexcept {
         handle = other.handle;
         other.handle = VK_NULL_HANDLE;
-        }
+    }
     ~framebuffer() {
         vkDestroyFramebuffer(context.vulkanInfo.device, handle, nullptr);
     }
     operator VkFramebuffer() { return handle; }
-    VkFramebuffer* getPointer() {return &handle;}
+    VkFramebuffer* getPointer() { return &handle; }
     VkResult create(VkFramebufferCreateInfo& createInfo) {
         createInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
         VkResult result = vkCreateFramebuffer(context.vulkanInfo.device,
@@ -367,6 +302,161 @@ class framebuffer {
         if (result)
             print_error("framebuffer", "Failed to create a framebuffer Code:",
                         int32_t(result));
+        return result;
+    }
+};
+struct pipelineCreateInfosPack {
+    VkGraphicsPipelineCreateInfo createInfo = {
+        VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO};
+    std::vector<VkPipelineShaderStageCreateInfo> shaderStages;
+    // 顶点输入
+    VkPipelineVertexInputStateCreateInfo vertexInputStateCi = {
+        VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO};
+    std::vector<VkVertexInputBindingDescription> vertexInputBindings;
+    std::vector<VkVertexInputAttributeDescription> vertexInputAttributes;
+    // 顶点汇编
+    VkPipelineInputAssemblyStateCreateInfo inputAssemblyStateCi = {
+        VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO};
+    // 细分着色器状态
+    VkPipelineTessellationStateCreateInfo tessellationStateCi = {
+        VK_STRUCTURE_TYPE_PIPELINE_TESSELLATION_STATE_CREATE_INFO};
+    // 视口
+    VkPipelineViewportStateCreateInfo viewportStateCi = {
+        VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO};
+    std::vector<VkViewport> viewports;
+    std::vector<VkRect2D> scissors;
+    // 动态视口/剪裁不会用到上述的vector，因此手动指定动态视口和剪裁的个数
+    uint32_t dynamicViewportCount = 1;
+    uint32_t dynamicScissorCount = 1;
+    // 光栅化
+    VkPipelineRasterizationStateCreateInfo rasterizationStateCi = {
+        VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO};
+    // 多重采样
+    VkPipelineMultisampleStateCreateInfo multisampleStateCi = {
+        VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO};
+    // 深度 & 剪裁
+    VkPipelineDepthStencilStateCreateInfo depthStencilStateCi = {
+        VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO};
+    // 颜色融混
+    VkPipelineColorBlendStateCreateInfo colorBlendStateCi = {
+        VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO};
+    std::vector<VkPipelineColorBlendAttachmentState> colorBlendAttachmentStates;
+    // 动态管线状态
+    VkPipelineDynamicStateCreateInfo dynamicStateCi = {
+        VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO};
+    std::vector<VkDynamicState> dynamicStates;
+    //--------------------
+    pipelineCreateInfosPack() {
+        set_create_infos();
+        createInfo.basePipelineIndex = -1;
+    }
+    pipelineCreateInfosPack(const pipelineCreateInfosPack& other) noexcept {
+        createInfo = other.createInfo;
+        set_create_infos();
+
+        vertexInputStateCi = other.vertexInputStateCi;
+        inputAssemblyStateCi = other.inputAssemblyStateCi;
+        tessellationStateCi = other.tessellationStateCi;
+        viewportStateCi = other.viewportStateCi;
+        rasterizationStateCi = other.rasterizationStateCi;
+        multisampleStateCi = other.multisampleStateCi;
+        depthStencilStateCi = other.depthStencilStateCi;
+        colorBlendStateCi = other.colorBlendStateCi;
+        dynamicStateCi = other.dynamicStateCi;
+
+        shaderStages = other.shaderStages;
+        vertexInputBindings = other.vertexInputBindings;
+        vertexInputAttributes = other.vertexInputAttributes;
+        viewports = other.viewports;
+        scissors = other.scissors;
+        colorBlendAttachmentStates = other.colorBlendAttachmentStates;
+        dynamicStates = other.dynamicStates;
+        update_all_array_pointers();
+    }
+    operator VkGraphicsPipelineCreateInfo&() { return createInfo; }
+    VkGraphicsPipelineCreateInfo* getPointer() { return &createInfo; }
+    // 该函数用于将各个vector中数据的地址赋值给各个创建信息中相应成员，并相应改变各个count
+    void update_all_arrays() {
+        createInfo.stageCount = shaderStages.size();
+        vertexInputStateCi.vertexBindingDescriptionCount =
+            vertexInputBindings.size();
+        vertexInputStateCi.vertexAttributeDescriptionCount =
+            vertexInputAttributes.size();
+        viewportStateCi.viewportCount = viewports.size()
+                                            ? uint32_t(viewports.size())
+                                            : dynamicViewportCount;
+        viewportStateCi.scissorCount =
+            scissors.size() ? uint32_t(scissors.size()) : dynamicScissorCount;
+        colorBlendStateCi.attachmentCount = colorBlendAttachmentStates.size();
+        dynamicStateCi.dynamicStateCount = dynamicStates.size();
+        update_all_array_pointers();
+    }
+
+   private:
+    // 将创建信息的地址赋值给basePipelineIndex中相应成员
+    void set_create_infos() {
+        createInfo.pVertexInputState = &vertexInputStateCi;
+        createInfo.pInputAssemblyState = &inputAssemblyStateCi;
+        createInfo.pTessellationState = &tessellationStateCi;
+        createInfo.pViewportState = &viewportStateCi;
+        createInfo.pRasterizationState = &rasterizationStateCi;
+        createInfo.pMultisampleState = &multisampleStateCi;
+        createInfo.pDepthStencilState = &depthStencilStateCi;
+        createInfo.pColorBlendState = &colorBlendStateCi;
+        createInfo.pDynamicState = &dynamicStateCi;
+    }
+    // 该将各个vector中数据的地址赋值给各个创建信息中相应成员，但不改变各个count
+    void update_all_array_pointers() {
+        createInfo.pStages = shaderStages.data();
+        vertexInputStateCi.pVertexBindingDescriptions =
+            vertexInputBindings.data();
+        vertexInputStateCi.pVertexAttributeDescriptions =
+            vertexInputAttributes.data();
+        viewportStateCi.pViewports = viewports.data();
+        viewportStateCi.pScissors = scissors.data();
+        colorBlendStateCi.pAttachments = colorBlendAttachmentStates.data();
+        dynamicStateCi.pDynamicStates = dynamicStates.data();
+    }
+};
+class pipeline {
+    VkPipeline handle = VK_NULL_HANDLE;
+
+   public:
+    pipeline() = default;
+    pipeline(VkGraphicsPipelineCreateInfo& createInfo) { create(createInfo); }
+    pipeline(VkComputePipelineCreateInfo& createInfo) { create(createInfo); }
+    pipeline(pipeline&& other) noexcept {
+        handle = other.handle;
+        other.handle = VK_NULL_HANDLE;
+    }
+    ~pipeline() {
+        vkDestroyPipeline(context.vulkanInfo.device, handle, nullptr);
+    }
+    operator VkPipeline() { return handle; }
+    VkPipeline* getPointer() { return &handle; }
+    VkResult create(VkGraphicsPipelineCreateInfo& createInfo) {
+        createInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+        VkResult result = vkCreateGraphicsPipelines(
+            graphicsBase::Base().Device(), VK_NULL_HANDLE, 1, &createInfo,
+            nullptr, &handle);
+        if (result) {
+            print_error(
+                "pipeline",
+                "Failed to create a graphics pipeline! Code:", int32_t(result));
+        }
+        return result;
+    }
+    VkResult create(VkComputePipelineCreateInfo& createInfo) {
+        createInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+        VkResult result = vkCreateComputePipelines(
+            graphicsBase::Base().Device(), VK_NULL_HANDLE, 1, &createInfo,
+            nullptr, &handle);
+        if (result) {
+            print_error(
+                "pipeline",
+                "Failed to create a graphics pipeline! Code:", int32_t(result));
+        }
+
         return result;
     }
 };

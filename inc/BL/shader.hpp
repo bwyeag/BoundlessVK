@@ -4,6 +4,7 @@
 #include <string>
 #include "init.hpp"
 #include "types.hpp"
+#include "ftypes.hpp"
 namespace BL {
 const char* const SHADER_ENTRY_NAME = "main";
 class Shader {
