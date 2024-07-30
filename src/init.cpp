@@ -42,6 +42,11 @@ void calcFps() {
         }
     }
 }
+static void _size_callback(GLFWwindow* window, int width, int height) {
+    context.windowInfo.height = height;
+    context.windowInfo.width = width;
+    print_log("WindowSize", "New window size(w/h):", width, height);
+}
 bool initWindow(const char* title, bool fullScreen, bool isResizable) {
     if (!glfwInit()) {
         print_error("InitWindow", "GLFW init failed!");
@@ -63,6 +68,7 @@ bool initWindow(const char* title, bool fullScreen, bool isResizable) {
         wInfo.pWindow = glfwCreateWindow(wInfo.width, wInfo.height, title,
                                          nullptr, nullptr);
     }
+    glfwSetWindowSizeCallback(wInfo.pWindow, _size_callback);
     if (!wInfo.pWindow) {
         print_error("InitWindow", "GLFW window create failed!");
         glfwTerminate();
@@ -323,14 +329,17 @@ std::vector<VkExtensionProperties> _getDeviceExtensions() {
     auto& info = context.vulkanInfo;
     std::vector<VkExtensionProperties> ext;
     uint32_t ext_count = 0;
-    VkResult res = vkEnumerateDeviceExtensionProperties(info.phyDevice,nullptr, &ext_count, nullptr);
-    if (res!=VK_SUCCESS){
-        print_error("getDeviceExtensions","enumerate device ext failed!");
+    VkResult res = vkEnumerateDeviceExtensionProperties(info.phyDevice, nullptr,
+                                                        &ext_count, nullptr);
+    if (res != VK_SUCCESS) {
+        print_error("getDeviceExtensions", "enumerate device ext failed!");
     }
     ext.resize(ext_count);
-    vkEnumerateDeviceExtensionProperties(info.phyDevice,nullptr, &ext_count, ext.data());
+    vkEnumerateDeviceExtensionProperties(info.phyDevice, nullptr, &ext_count,
+                                         ext.data());
     if constexpr (PRINT_DEVICE_EXTENSIONS) {
-        print_log("Info", "Supported Device Extensions list: count:", ext_count);
+        print_log("Info",
+                  "Supported Device Extensions list: count:", ext_count);
         for (const VkExtensionProperties& it : ext) {
             print_log("Info", '\t', it.extensionName);
         }
@@ -532,8 +541,7 @@ VkResult _createSwapchain(bool limitFrameRate,
     createInfo.clipped = VK_TRUE;
     if (VkResult result = _createSwapChain_Internal())
         return result;
-    for (auto& i : context.callbacks_createSwapchain)
-        i();
+    _iterateCallback_CreateSwapchain();
     return VK_SUCCESS;
 }
 VkResult _createSwapChain_Internal() {
@@ -621,8 +629,9 @@ VkResult recreateSwapchain() {
     auto& info = context.vulkanInfo;
     auto& createInfo = info.swapchainCreateInfo;
     VkSurfaceCapabilitiesKHR surfaceCapabilities = {};
-    if (VkResult result = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(
-            info.phyDevice, info.surface, &surfaceCapabilities)) {
+    VkResult result = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(
+        info.phyDevice, info.surface, &surfaceCapabilities);
+    if (result != VK_SUCCESS) {
         print_error(
             "recreateSwapchain",
             "Failed to get physical device surface capabilities! Error code:",
@@ -634,7 +643,7 @@ VkResult recreateSwapchain() {
         return VK_SUBOPTIMAL_KHR;
     createInfo.imageExtent = surfaceCapabilities.currentExtent;
     createInfo.oldSwapchain = info.swapchain;
-    VkResult result = vkQueueWaitIdle(info.queue_graphics);
+    result = vkQueueWaitIdle(info.queue_graphics);
     // 仅在等待图形队列成功，且图形与呈现所用队列不同时等待呈现队列
     if (!result && info.queue_graphics != info.queue_presentation)
         result = vkQueueWaitIdle(info.queue_presentation);
@@ -644,22 +653,31 @@ VkResult recreateSwapchain() {
                     int32_t(result));
         return result;
     }
-    for (auto& i : context.callbacks_destroySwapchain)
-        i();
+    _iterateCallback_DestroySwapchain();
     for (auto& i : info.swapchainImageViews)
         if (i)
             vkDestroyImageView(info.device, i, nullptr);
     info.swapchainImageViews.resize(0);
-    if (result = _createSwapChain_Internal())
+    result = _createSwapChain_Internal();
+    if (result != VK_SUCCESS) {
+        print_error("recreateSwapchain",
+                    "Create swapchain failed! Code:", int32_t(result));
         return result;
-    for (auto& i : context.callbacks_createSwapchain)
-        i();
+    }
+    _iterateCallback_CreateSwapchain();
+    print_log("Info", "Window Resized!");
     return VK_SUCCESS;
 }
 void terminateVulkan() {
     _destroyHandles();
     _clearHandles();
     return;
+}
+void waitAll() {
+    auto& info = context.vulkanInfo;
+    if (info.device) {
+        vkDeviceWaitIdle(info.device);
+    }
 }
 void _destroyHandles() {
     auto& info = context.vulkanInfo;
@@ -669,8 +687,7 @@ void _destroyHandles() {
         vkDeviceWaitIdle(info.device);
         _terminateVMA();
         if (info.swapchain) {
-            for (auto& i : context.callbacks_destroySwapchain)
-                i();
+            _iterateCallback_DestroySwapchain();
             for (auto& i : info.swapchainImageViews)
                 if (i)
                     vkDestroyImageView(info.device, i, nullptr);
@@ -737,5 +754,45 @@ VkResult _initVMA(VmaAllocatorCreateFlags flag) {
 void _terminateVMA() {
     auto& info = context.vulkanInfo;
     vmaDestroyAllocator(info.allocator);
+}
+void _iterateCallback_CreateSwapchain() {
+    for (std::map<int, std::function<void()> >::iterator it =
+             context.callbacks_createSwapchain.begin();
+         it != context.callbacks_createSwapchain.end(); ++it) {
+        (it->second)();
+    }
+}
+void _iterateCallback_DestroySwapchain() {
+    for (std::map<int, std::function<void()> >::iterator it =
+             context.callbacks_destroySwapchain.begin();
+         it != context.callbacks_destroySwapchain.end(); ++it) {
+        (it->second)();
+    }
+}
+int addCallback_CreateSwapchain(std::function<void()> p) {
+    static uint32_t id = 1;
+    context.callbacks_createSwapchain.insert({id,p});
+    return id++;
+}
+int addCallback_DestroySwapchain(std::function<void()> p) {
+    static uint32_t id = 1;
+    context.callbacks_destroySwapchain.insert({id,p});
+    return id++;
+}
+void removeCallback_CreateSwapchain(int id) {
+    auto it = context.callbacks_createSwapchain.find(id);
+    if (it==context.callbacks_createSwapchain.end()) {
+        print_error("Callback","CreateSwapchain id not found:",id);
+        return;
+    }
+    context.callbacks_createSwapchain.erase(it);
+}
+void removeCallback_DestroySwapchain(int id) {
+    auto it = context.callbacks_destroySwapchain.find(id);
+    if (it==context.callbacks_destroySwapchain.end()) {
+        print_error("Callback","DestroySwapchain id not found:",id);
+        return;
+    }
+    context.callbacks_destroySwapchain.erase(it);
 }
 }  // namespace BL

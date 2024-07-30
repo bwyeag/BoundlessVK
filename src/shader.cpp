@@ -1,9 +1,9 @@
 #include "shader.hpp"
 
 namespace BL {
-Shader::Shader(const std::string& path) {
+Shader::Shader(const std::string& path, VkSpecializationInfo* specInfo) {
     std::vector<ShaderInfo> info = readPartInfo(path);
-    if (info.size()==0) {
+    if (info.size() == 0) {
         return;
     }
     VkShaderModuleCreateInfo create_info;
@@ -11,22 +11,35 @@ Shader::Shader(const std::string& path) {
     create_info.pNext = nullptr;
     create_info.flags = 0;
     modules.resize(info.size());
+    stages.resize(info.size());
     for (uint32_t i = 0; i < info.size(); i++) {
         create_info.codeSize = info[i].length;
         create_info.pCode = info[i].data;
-        VkResult res = vkCreateShaderModule(context.vulkanInfo.device,create_info,nullptr,&modules[i]);
-        if (res!=VK_SUCCESS) {
-            print_error("Shader", "Shader module create failed! Code:",res);
-            for (uint32_t j = 0; j < info.size(); j++){
-                free(info[i].data);
-            }
-            return;
+        VkResult res = vkCreateShaderModule(context.vulkanInfo.device,
+                                            &create_info, nullptr, &modules[i]);
+        stages[i].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+        stages[i].pNext = nullptr;
+        stages[i].flags = 0;
+        stages[i].pName = SHADER_ENTRY_NAME;
+        stages[i].module = modules[i];
+        stages[i].pSpecializationInfo = specInfo;
+        stages[i].stage = info[i].stage;
+        if (res != VK_SUCCESS) {
+            print_error("Shader", "Shader module create failed! Code:", res);
+            break;
         }
     }
-    /*to do*/
+    for (uint32_t j = 0; j < info.size(); j++) {
+        free(info[j].data);
+    }
 }
-std::vector<ShaderInfo> Shader::readPartInfo(const std::string& path) {
-    std::vector<ShaderInfo> res;
+Shader::~Shader() {
+    for (uint32_t i = 0; i < modules.size(); i++) {
+        vkDestroyShaderModule(context.vulkanInfo.device, modules[i], nullptr);
+    }
+}
+std::vector<Shader::ShaderInfo> Shader::readPartInfo(const std::string& path) {
+    std::vector<Shader::ShaderInfo> res;
     std::ifstream input(path, std::ios::binary);
     if (!input.is_open()) {
         print_error("Shader", "File not found!");
@@ -57,7 +70,7 @@ std::vector<ShaderInfo> Shader::readPartInfo(const std::string& path) {
         }
         size_t pos = input.tellg();
         input.seekg(tmp.start);
-        input.read((char*)res[i].data,tmp.length);
+        input.read((char*)res[i].data, tmp.length);
         input.seekg(pos);
     }
     return res;

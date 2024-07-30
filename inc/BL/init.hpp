@@ -5,7 +5,8 @@
 #include <cstring>
 #include <algorithm>
 #include <functional>
-#include <log.hpp>
+#include <map>
+#include "log.hpp"
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 #include <vulkan/vulkan.h>
@@ -44,14 +45,24 @@ struct VulkanContext {
 #endif //BL_DEBUG
     VmaAllocator allocator;
 };
+struct RenderContext;
 struct Context {
     WindowContext windowInfo;
     VulkanContext vulkanInfo;
-    std::vector<std::function<void()>> callbacks_createSwapchain;
-    std::vector<std::function<void()>> callbacks_destroySwapchain;
-
+    RenderContext*renderInfo;
+    std::map<int,std::function<void()> > callbacks_createSwapchain;
+    std::map<int,std::function<void()> > callbacks_destroySwapchain;
+    uint32_t getSwapChainImageCount() const {
+        return this->vulkanInfo.swapchainImageViews.size();
+    }
 };
 extern Context context;
+void _iterateCallback_CreateSwapchain();
+void _iterateCallback_DestroySwapchain();
+int addCallback_CreateSwapchain(std::function<void()> p);
+int addCallback_DestroySwapchain(std::function<void()> p);
+void removeCallback_CreateSwapchain(int id);
+void removeCallback_DestroySwapchain(int id);
 /*
 * 窗口相关函数
 */
@@ -75,7 +86,7 @@ inline bool checkWindowClose() {
 bool initVulkan();
 void terminateVulkan();
 VkResult recreateSwapchain();/*重建交换链到当前窗口表面大小*/
-
+void waitAll();
 void _destroyHandles();
 void _clearHandles();
 std::vector<const char*> _getInstanceExtension();
