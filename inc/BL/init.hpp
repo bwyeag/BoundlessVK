@@ -45,13 +45,9 @@ struct VulkanContext {
 #endif //BL_DEBUG
     VmaAllocator allocator;
 };
-struct RenderContext;
-struct RenderContextPlus;
 struct Context {
     WindowContext windowInfo;
     VulkanContext vulkanInfo;
-    RenderContext*renderInfo;
-    RenderContextPlus*renderContext;
     std::map<int,std::function<void()> > callbacks_createSwapchain;
     std::map<int,std::function<void()> > callbacks_destroySwapchain;
     uint32_t getSwapChainImageCount() const {

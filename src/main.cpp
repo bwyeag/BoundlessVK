@@ -6,16 +6,16 @@ int main() {
     if (!BL::initWindow("Boundless", false, true)||!BL::initVulkan()) {
         return -1;
     }
-    BL::initRenderLoop();
+    BL::initVulkanRenderer();
     while (!BL::checkWindowClose()) {
         while (glfwGetWindowAttrib(BL::context.windowInfo.pWindow, GLFW_ICONIFIED))
             glfwWaitEvents();
-        BL::renderLoop();
+        BL::render();
         glfwPollEvents();
         BL::calcFps();
     }
     BL::waitAll();
-    BL::terminateRenderLoop();
+    BL::terminateVulkanRenderer();
     BL::terminateVulkan();
     BL::terminateWindow();
     system("pause");

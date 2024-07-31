@@ -268,7 +268,7 @@ VkResult _getQueueFamilyIndices(VkPhysicalDevice physicalDevice) {
     for (uint32_t i = 0; i < queueFamilyCount; i++) {
         VkBool32 supportGraphics = queueFamilyPropertieses[i].queueFlags &
                                    VK_QUEUE_GRAPHICS_BIT,
-                 supportPresentation = false,
+                 supportPresentation = VK_FALSE,
                  supportCompute = queueFamilyPropertieses[i].queueFlags &
                                   VK_QUEUE_COMPUTE_BIT;
         if (info.surface)
@@ -771,26 +771,26 @@ void _iterateCallback_DestroySwapchain() {
 }
 int addCallback_CreateSwapchain(std::function<void()> p) {
     static uint32_t id = 1;
-    context.callbacks_createSwapchain.insert({id,p});
+    context.callbacks_createSwapchain.insert({id, p});
     return id++;
 }
 int addCallback_DestroySwapchain(std::function<void()> p) {
     static uint32_t id = 1;
-    context.callbacks_destroySwapchain.insert({id,p});
+    context.callbacks_destroySwapchain.insert({id, p});
     return id++;
 }
 void removeCallback_CreateSwapchain(int id) {
     auto it = context.callbacks_createSwapchain.find(id);
-    if (it==context.callbacks_createSwapchain.end()) {
-        print_error("Callback","CreateSwapchain id not found:",id);
+    if (it == context.callbacks_createSwapchain.end()) {
+        print_error("Callback", "CreateSwapchain id not found:", id);
         return;
     }
     context.callbacks_createSwapchain.erase(it);
 }
 void removeCallback_DestroySwapchain(int id) {
     auto it = context.callbacks_destroySwapchain.find(id);
-    if (it==context.callbacks_destroySwapchain.end()) {
-        print_error("Callback","DestroySwapchain id not found:",id);
+    if (it == context.callbacks_destroySwapchain.end()) {
+        print_error("Callback", "DestroySwapchain id not found:", id);
         return;
     }
     context.callbacks_destroySwapchain.erase(it);
