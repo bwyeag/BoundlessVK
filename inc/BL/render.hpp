@@ -4,6 +4,8 @@
 #include "init.hpp"
 #include "shader.hpp"
 #include "types.hpp"
+
+#include <Eigen/Core>
 namespace BL {
 const uint32_t DEFAULT_MAX_FLIGHT_COUNT = 3;
 const bool FORCE_OWNERSHIP_TRANSFER = true;
@@ -70,10 +72,7 @@ class RenderPipeline {
     int callback_c_id, callback_d_id;
 
     RenderPipeline() { create(); }
-    ~RenderPipeline() {
-        removeCallback_CreateSwapchain(callback_c_id);
-        removeCallback_DestroySwapchain(callback_d_id);
-    }
+    ~RenderPipeline();
 };
 }  // namespace BL
 #endif  //!_BOUNDLESS_RENDER_FILE_

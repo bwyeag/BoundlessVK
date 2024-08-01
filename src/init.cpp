@@ -727,8 +727,8 @@ VmaAllocatorCreateFlags _getVMAflags(const std::vector<const char*>& ext) {
     for (uint32_t i = 0; i < ext.size(); i++) {
         for (uint32_t j = 0; j < vma_extcheck_count; j++) {
             if (std::strcmp(ext[i], vma_extensions[j]) == 0) {
-                flag |= vma_ext_flag[j];
-                print_log("Info", "VMA ext found:", ext[i]);
+                //flag |= vma_ext_flag[j];
+                //print_log("Info", "VMA ext found:", ext[i]);
             }
         }
     }

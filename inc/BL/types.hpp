@@ -497,7 +497,7 @@ class Pipeline {
 };
 class Buffer {
     VkBuffer handle = VK_NULL_HANDLE;
-    VmaAllocation allocation;
+    VmaAllocation allocation = VK_NULL_HANDLE;
 
    public:
     Buffer() = default;
@@ -510,18 +510,7 @@ class Buffer {
            VmaAllocationCreateFlags vma_flag,
            VmaMemoryUsage vma_usage,
            VkSharingMode sharing_mode = VK_SHARING_MODE_EXCLUSIVE) {
-        VkBufferCreateInfo bufInfo = {
-            .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-            .flags = vk_flag,
-            .size = size,
-            .usage = vk_usage,
-            .sharingMode = sharing_mode,
-        };
-        VmaAllocationCreateInfo allocInfo = {
-            .flags = vma_flag,
-            .usage = vma_usage
-        };
-        allocate(createInfo, allocInfo);
+        allocate(size,vk_flag,vk_usage,vma_flag,vma_usage,sharing_mode);
     }
     Buffer(Buffer&& other) noexcept {
         handle = other.handle;
@@ -532,7 +521,11 @@ class Buffer {
     operator VmaAllocation() { return allocation; }
     VmaAllocation getAllocation() { return allocation; }
     ~Buffer() {
-        vmaDestroyBuffer(context.vulkanInfo.allocator, handle, allocation);
+        if (handle) {
+            vmaDestroyBuffer(context.vulkanInfo.allocator, handle, allocation);
+        }
+        handle = VK_NULL_HANDLE;
+        allocation = VK_NULL_HANDLE;
     }
     VkResult transfer_data(const void* pData,
                            VkDeviceSize length,
@@ -557,6 +550,23 @@ class Buffer {
         }
         return result;
     }
+    VkResult allocate(VkDeviceSize size,
+                      VkBufferCreateFlags vk_flag,
+                      VkBufferUsageFlagBits vk_usage,
+                      VmaAllocationCreateFlags vma_flag,
+                      VmaMemoryUsage vma_usage,
+                      VkSharingMode sharing_mode = VK_SHARING_MODE_EXCLUSIVE) {
+        VkBufferCreateInfo createInfo = {
+            .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+            .flags = vk_flag,
+            .size = size,
+            .usage = vk_usage,
+            .sharingMode = sharing_mode,
+        };
+        VmaAllocationCreateInfo allocInfo = {.flags = vma_flag,
+                                             .usage = vma_usage};
+        return allocate(createInfo, allocInfo);
+    }
 };
 class BufferView {
     VkBufferView handle = VK_NULL_HANDLE;
@@ -575,12 +585,14 @@ class BufferView {
         other.handle = VK_NULL_HANDLE;
     }
     ~BufferView() {
-        vkDestroyBufferView(context.vulkanInfo.device, handle, nullptr);
+        if (!handle)
+            vkDestroyBufferView(context.vulkanInfo.device, handle, nullptr);
+        handle = VK_NULL_HANDLE;
     }
     operator VkBufferView() { return handle; }
     VkBufferView* getPointer() { return &handle; }
     VkResult create(VkBufferViewCreateInfo& createInfo) {
-        VkResult result = vkCreateBufferView(graphicsBase::Base().Device(),
+        VkResult result = vkCreateBufferView(context.vulkanInfo.device,
                                              &createInfo, nullptr, &handle);
         if (result)
             print_error("BufferView", "Failed to create a buffer view! Code:",

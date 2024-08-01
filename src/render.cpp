@@ -6,6 +6,7 @@ const VkExtent2D& window_size =
 //----------------
 RenderPassPack* pRenderpass_pack;
 RenderPipeline* pRenderPipeline;
+BL::Buffer vertex_buffer;
 //----------------
 bool initVulkanRenderer() {
     VkResult result = _createRenderContext(DEFAULT_MAX_FLIGHT_COUNT);
@@ -220,6 +221,8 @@ void render() {
         {{}, window_size}, &clearColor, 1);
     vkCmdBindPipeline(curBuf, VK_PIPELINE_BIND_POINT_GRAPHICS,
                       VkPipeline(pRenderPipeline->renderPipeline));
+    VkDeviceSize offset = 0;
+    vkCmdBindVertexBuffers(curBuf, 0, 1, vertex_buffer.getPointer(), &offset);
     vkCmdDraw(curBuf, 3, 1, 0, 0);
     pRenderpass_pack->renderPass.cmd_end(curBuf);
     //----------------
@@ -368,9 +371,20 @@ void RenderPassPack::create() {
     callback_c_id = addCallback_CreateSwapchain(CreateFramebuffers);
     callback_d_id = addCallback_DestroySwapchain(DestroyFramebuffers);
 }
+struct vertex {
+    Eigen::Vector2f position;
+    Eigen::Vector4f color;
+};
+vertex vertices[] = {
+    { {  .0f, -.5f }, { 1, 0, 0, 1 } },//红色
+    { { -.5f,  .5f }, { 0, 1, 0, 1 } },//绿色
+    { {  .5f,  .5f }, { 0, 0, 1, 1 } } //蓝色
+};
 void RenderPipeline::create() {
     shader.create(
         "D:\\c++programs\\BoundlessVK\\BoundlessVK\\shader\\shader.shader");
+    vertex_buffer.allocate(sizeof(vertices),0,VK_BUFFER_USAGE_VERTEX_BUFFER_BIT ,VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT,VMA_MEMORY_USAGE_AUTO);
+    vertex_buffer.transfer_data(&vertices,sizeof(vertices));
     auto Create = [this] {
         VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo{
             .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
@@ -386,6 +400,12 @@ void RenderPipeline::create() {
         pack.multisampleStateCi.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
         pack.colorBlendAttachmentStates.push_back(
             VkPipelineColorBlendAttachmentState{.colorWriteMask = 0b1111});
+        //数据来自0号顶点缓冲区，输入频率是逐顶点输入
+        pack.vertexInputBindings.emplace_back(0, sizeof(vertex), VK_VERTEX_INPUT_RATE_VERTEX);
+        //location为0，数据来自0号顶点缓冲区，vec2对应VK_FORMAT_R32G32_SFLOAT，用offsetof计算position在vertex中的起始位置
+        pack.vertexInputAttributes.emplace_back(0, 0, VK_FORMAT_R32G32_SFLOAT,offsetof(vertex,position));
+        //location为1，数据来自0号顶点缓冲区，vec4对应VK_FORMAT_R32G32B32A32_SFLOAT，用offsetof计算color在vertex中的起始位置
+        pack.vertexInputAttributes.emplace_back(1, 0, VK_FORMAT_R32G32B32A32_SFLOAT, offsetof(vertex,color));
         pack.update_all_arrays();
         pack.createInfo.stageCount = shader.getStages().size();
         pack.createInfo.pStages = shader.getStages().data();
@@ -395,5 +415,10 @@ void RenderPipeline::create() {
     callback_c_id = addCallback_CreateSwapchain(Create);
     callback_d_id = addCallback_DestroySwapchain(Destroy);
     Create();
+}
+RenderPipeline::~RenderPipeline() {
+    removeCallback_CreateSwapchain(callback_c_id);
+    removeCallback_DestroySwapchain(callback_d_id);
+    vertex_buffer.~Buffer();
 }
 }  // namespace BL
