@@ -495,5 +495,110 @@ class Pipeline {
         return result;
     }
 };
+class Buffer {
+    VkBuffer handle = VK_NULL_HANDLE;
+    VmaAllocation allocation;
+
+   public:
+    Buffer() = default;
+    Buffer(VkBufferCreateInfo& createInfo, VmaAllocationCreateInfo& allocInfo) {
+        allocate(createInfo, allocInfo);
+    }
+    Buffer(VkDeviceSize size,
+           VkBufferCreateFlags vk_flag,
+           VkBufferUsageFlagBits vk_usage,
+           VmaAllocationCreateFlags vma_flag,
+           VmaMemoryUsage vma_usage,
+           VkSharingMode sharing_mode = VK_SHARING_MODE_EXCLUSIVE) {
+        VkBufferCreateInfo bufInfo = {
+            .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+            .flags = vk_flag,
+            .size = size,
+            .usage = vk_usage,
+            .sharingMode = sharing_mode,
+        };
+        VmaAllocationCreateInfo allocInfo = {
+            .flags = vma_flag,
+            .usage = vma_usage
+        };
+        allocate(createInfo, allocInfo);
+    }
+    Buffer(Buffer&& other) noexcept {
+        handle = other.handle;
+        other.handle = VK_NULL_HANDLE;
+    }
+    operator VkBuffer() { return handle; }
+    VkBuffer* getPointer() { return &handle; }
+    operator VmaAllocation() { return allocation; }
+    VmaAllocation getAllocation() { return allocation; }
+    ~Buffer() {
+        vmaDestroyBuffer(context.vulkanInfo.allocator, handle, allocation);
+    }
+    VkResult transfer_data(const void* pData,
+                           VkDeviceSize length,
+                           VkDeviceSize offset = 0) {
+        return vmaCopyMemoryToAllocation(context.vulkanInfo.allocator, pData,
+                                         allocation, offset, length);
+    }
+    VkResult retrieve_data(void* pData,
+                           VkDeviceSize length,
+                           VkDeviceSize offset = 0) {
+        return vmaCopyAllocationToMemory(context.vulkanInfo.allocator,
+                                         allocation, offset, pData, length);
+    }
+    VkResult allocate(VkBufferCreateInfo& createInfo,
+                      VmaAllocationCreateInfo& allocInfo) {
+        VkResult result =
+            vmaCreateBuffer(context.vulkanInfo.allocator, &createInfo,
+                            &allocInfo, &handle, &allocation, nullptr);
+        if (result) {
+            print_error("Buffer",
+                        "VMA error when create Buffer. Code:", int32_t(result));
+        }
+        return result;
+    }
+};
+class BufferView {
+    VkBufferView handle = VK_NULL_HANDLE;
+
+   public:
+    BufferView() = default;
+    BufferView(VkBufferViewCreateInfo& createInfo) { create(createInfo); }
+    BufferView(VkBuffer buffer,
+               VkFormat format,
+               VkDeviceSize offset = 0,
+               VkDeviceSize range = 0 /*VkBufferViewCreateFlags flags*/) {
+        create(buffer, format, offset, range);
+    }
+    BufferView(BufferView&& other) noexcept {
+        handle = other.handle;
+        other.handle = VK_NULL_HANDLE;
+    }
+    ~BufferView() {
+        vkDestroyBufferView(context.vulkanInfo.device, handle, nullptr);
+    }
+    operator VkBufferView() { return handle; }
+    VkBufferView* getPointer() { return &handle; }
+    VkResult create(VkBufferViewCreateInfo& createInfo) {
+        VkResult result = vkCreateBufferView(graphicsBase::Base().Device(),
+                                             &createInfo, nullptr, &handle);
+        if (result)
+            print_error("BufferView", "Failed to create a buffer view! Code:",
+                        int32_t(result));
+        return result;
+    }
+    VkResult create(VkBuffer buffer,
+                    VkFormat format,
+                    VkDeviceSize offset = 0,
+                    VkDeviceSize range = 0 /*VkBufferViewCreateFlags flags*/) {
+        VkBufferViewCreateInfo createInfo = {
+            .sType = VK_STRUCTURE_TYPE_BUFFER_VIEW_CREATE_INFO,
+            .buffer = buffer,
+            .format = format,
+            .offset = offset,
+            .range = range};
+        return create(createInfo);
+    }
+};
 }  // namespace BL
 #endif  //! BOUNDLESS_TYPES_FILE

@@ -48,9 +48,9 @@ VkResult present_image(uint32_t* index,
                        uint32_t waitSemsCount = 0,
                        VkSemaphore* sems = nullptr);
 class RenderPassPack {
+   public:
     void create();
 
-   public:
     RenderPass renderPass;
     std::vector<Framebuffer> framebuffers;
     int callback_c_id, callback_d_id;
@@ -61,9 +61,9 @@ class RenderPassPack {
     }
 };
 class RenderPipeline {
+   public:
     void create();
 
-   public:
     Pipeline renderPipeline;
     PipelineLayout layout;
     Shader shader;

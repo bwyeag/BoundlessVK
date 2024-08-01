@@ -32,3 +32,4 @@
 *.app
 
 build/
+inc/eigen-3.4.0
