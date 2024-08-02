@@ -567,8 +567,7 @@ class Buffer {
             .flags = vk_flag,
             .size = size,
             .usage = vk_usage,
-            .sharingMode = sharing_mode,
-        };
+            .sharingMode = sharing_mode};
         VmaAllocationCreateInfo allocInfo = {.flags = vma_flag,
                                              .usage = vma_usage};
         return allocate(createInfo, allocInfo);
@@ -615,6 +614,101 @@ class BufferView {
             .format = format,
             .offset = offset,
             .range = range};
+        return create(createInfo);
+    }
+};
+class QueryPool {
+    VkQueryPool handle = VK_NULL_HANDLE;
+
+   public:
+    QueryPool() = default;
+    QueryPool(VkQueryPoolCreateInfo& createInfo) { create(createInfo); }
+    QueryPool(VkQueryType queryType,
+              uint32_t queryCount,
+              VkQueryPipelineStatisticFlags pipelineStatistics =
+                  0 /*VkQueryPoolCreateFlags flags*/) {
+        create(queryType, queryCount, pipelineStatistics);
+    }
+    VkQueryPool(VkQueryPool&& other) noexcept {
+        handle = other.handle;
+        other.handle = VK_NULL_HANDLE;
+    }
+    ~BufferView() {
+        if (!handle)
+            vkDestroyQueryPool(context.vulkanInfo.device, handle, nullptr);
+        handle = VK_NULL_HANDLE;
+    }
+    operator VkQueryPool() { return handle; }
+    VkQueryPool* getPointer() { return &handle; }
+    void cmd_reset(VkCommandBuffer commandBuffer,
+                   uint32_t firstQueryIndex,
+                   uint32_t queryCount) const {
+        vkCmdResetQueryPool(commandBuffer, handle, firstQueryIndex, queryCount);
+    }
+    void cmd_begin(VkCommandBuffer commandBuffer,
+                   uint32_t queryIndex,
+                   VkQueryControlFlags flags = 0) const {
+        vkCmdBeginQuery(commandBuffer, handle, queryIndex, flags);
+    }
+    void cmd_end(VkCommandBuffer commandBuffer, uint32_t queryIndex) const {
+        vkCmdEndQuery(commandBuffer, handle, queryIndex);
+    }
+    void cmd_write_timestamp(VkCommandBuffer commandBuffer,
+                             VkPipelineStageFlagBits pipelineStage,
+                             uint32_t queryIndex) const {
+        vkCmdWriteTimestamp(commandBuffer, pipelineStage, handle, queryIndex);
+    }
+    void cmd_copy_results(VkCommandBuffer commandBuffer,
+                          uint32_t firstQueryIndex,
+                          uint32_t queryCount,
+                          VkBuffer buffer_dst,
+                          VkDeviceSize offset_dst,
+                          VkDeviceSize stride,
+                          VkQueryResultFlags flags = 0) const {
+        vkCmdCopyQueryPoolResults(commandBuffer, handle, firstQueryIndex,
+                                  queryCount, buffer_dst, offset_dst, stride,
+                                  flags);
+    }
+    VkResult get_results(uint32_t firstQueryIndex,
+                         uint32_t queryCount,
+                         size_t dataSize,
+                         void* pData_dst,
+                         VkDeviceSize stride,
+                         VkQueryResultFlags flags = 0) const {
+        VkResult result = vkGetQueryPoolResults(
+            context.vulkanInfo.device, handle, firstQueryIndex, queryCount,
+            dataSize, pData_dst, stride, flags);
+        if (result)
+            result > 0
+                ?  // 若返回值为VK_NOT_READY，则查询尚未结束，有查询结果尚不可获
+                print_error("QueryPool", "Not all queries are available! Code:",
+                            int32_t(result))
+                : print_error("QueryPool",
+                              "Failed to get query pool results! Code:",
+                              int32_t(result));
+        return result;
+    }
+    void reset(uint32_t firstQueryIndex, uint32_t queryCount) {
+        vkResetQueryPool(context.vulkanInfo.device, handle, firstQueryIndex,
+                         queryCount);
+    }
+    VkResult create(VkQueryPoolCreateInfo& createInfo) {
+        VkResult result = vkCreateQueryPool(context.vulkanInfo.device,
+                                            &createInfo, nullptr, &handle);
+        if (result)
+            print_error("QueryPool", "Failed to create a query pool! Code:",
+                int32_t(result));
+        return result;
+    }
+    VkResult create(VkQueryType queryType,
+                    uint32_t queryCount,
+                    VkQueryPipelineStatisticFlags pipelineStatistics =
+                        0 /*VkQueryPoolCreateFlags flags*/) {
+        VkQueryPoolCreateInfo createInfo = {
+            .sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO.queryType =
+                queryType,
+            .queryCount = queryCount,
+            .pipelineStatistics = pipelineStatistics};
         return create(createInfo);
     }
 };
