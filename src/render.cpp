@@ -371,11 +371,7 @@ void RenderPassPack::create() {
     callback_c_id = addCallback_CreateSwapchain(CreateFramebuffers);
     callback_d_id = addCallback_DestroySwapchain(DestroyFramebuffers);
 }
-struct vertex {
-    Eigen::Vector2f position;
-    Eigen::Vector4f color;
-};
-vertex vertices[] = {
+Vertex_2d vertices[] = {
     { {  .0f, -.5f }, { 1, 0, 0, 1 } },//红色
     { { -.5f,  .5f }, { 0, 1, 0, 1 } },//绿色
     { {  .5f,  .5f }, { 0, 0, 1, 1 } } //蓝色
@@ -400,12 +396,9 @@ void RenderPipeline::create() {
         pack.multisampleStateCi.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
         pack.colorBlendAttachmentStates.push_back(
             VkPipelineColorBlendAttachmentState{.colorWriteMask = 0b1111});
-        //数据来自0号顶点缓冲区，输入频率是逐顶点输入
-        pack.vertexInputBindings.emplace_back(0, sizeof(vertex), VK_VERTEX_INPUT_RATE_VERTEX);
-        //location为0，数据来自0号顶点缓冲区，vec2对应VK_FORMAT_R32G32_SFLOAT，用offsetof计算position在vertex中的起始位置
-        pack.vertexInputAttributes.emplace_back(0, 0, VK_FORMAT_R32G32_SFLOAT,offsetof(vertex,position));
-        //location为1，数据来自0号顶点缓冲区，vec4对应VK_FORMAT_R32G32B32A32_SFLOAT，用offsetof计算color在vertex中的起始位置
-        pack.vertexInputAttributes.emplace_back(1, 0, VK_FORMAT_R32G32B32A32_SFLOAT, offsetof(vertex,color));
+        // 0号顶点缓冲区
+        pack.vertexInputBindings.emplace_back(0, sizeof(Vertex_2d), VK_VERTEX_INPUT_RATE_VERTEX);
+        Vertex_2d::fill_attribute(pack.vertexInputAttributes);
         pack.update_all_arrays();
         pack.createInfo.stageCount = shader.getStages().size();
         pack.createInfo.pStages = shader.getStages().data();

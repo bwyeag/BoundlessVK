@@ -4,6 +4,7 @@
 #include "init.hpp"
 #include "shader.hpp"
 #include "types.hpp"
+#include "vertex.hpp"
 
 #include <Eigen/Core>
 namespace BL {

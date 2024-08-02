@@ -36,6 +36,7 @@ struct MeshFileHead {
         Range attr;  // 以索引计算的参数
     };
     uint32_t _head;
+    uint32_t _crc32;
     uint32_t nameLen;
     char name[64];
     VkPrimitiveTopology topology;
@@ -47,7 +48,6 @@ struct MeshFileHead {
 
     Range vertexBuffers;  // 指向一些BufferInfo
     Range indexBuffer;    // 指向索引缓冲， 压缩
-    Range vertexAttrs;    // 指向顶点参数
 
     std::string getName() {
         std::string res;
@@ -58,7 +58,7 @@ struct MeshFileHead {
     void setName(const char* n) {
         uint32_t i = 0;
         while (i < 64) {
-            if (name[i] == '\0')
+            if (n[i] == '\0')
                 break;
             else
                 name[i] = n[i], i++;
