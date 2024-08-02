@@ -3,13 +3,8 @@ namespace BL {
 RenderContext render_context;
 const VkExtent2D& window_size =
     context.vulkanInfo.swapchainCreateInfo.imageExtent;
-//----------------
-RenderPassPack* pRenderpass_pack;
-RenderPipeline* pRenderPipeline;
-BL::Buffer vertex_buffer;
-//----------------
 bool initVulkanRenderer() {
-    VkResult result = _createRenderContext(DEFAULT_MAX_FLIGHT_COUNT);
+    VkResult result = _createRenderContext();
     if (result)
         return false;
     _createRenderLoop();
@@ -19,24 +14,21 @@ void terminateVulkanRenderer() {
     _destroyRenderLoop();
     _destroyRenderContext();
 }
-VkResult _createRenderContext(uint32_t c) {
+VkResult _createRenderContext() {
     auto& info = context.vulkanInfo;
     VkResult result;
     if (info.queueFamilyIndex_graphics != VK_QUEUE_FAMILY_IGNORED) {
         result = render_context.cmdPool_graphics.create(
             info.queueFamilyIndex_graphics,
             VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
-        if (result) {
-            _destroyRenderContext();
-            return result;
-        }
+        if (result)
+            goto CREATE_FAILED;
         result = render_context.cmdPool_graphics.allocate_buffer(
             &render_context.cmdBuffer_transfer);
         if (result)
             goto CREATE_FAILED;
-        render_context.cmdBufs.resize(c);
         result = render_context.cmdPool_graphics.allocate_buffers(
-            render_context.cmdBufs.data(), c);
+            render_context.cmdBufs.data(), MAX_FLIGHT_NUM);
         if (result)
             goto CREATE_FAILED;
     }
@@ -59,23 +51,22 @@ VkResult _createRenderContext(uint32_t c) {
             VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
         if (result)
             goto CREATE_FAILED;
-        render_context.cmdBuffer_presentation.resize(c);
         result = render_context.cmdPool_presentation.allocate_buffers(
-            render_context.cmdBuffer_presentation.data(), c);
+            render_context.cmdBuffer_presentation.data(), MAX_FLIGHT_NUM);
         if (result)
             goto CREATE_FAILED;
-        render_context.semsOwnershipIsTransfered.resize(c);
+        for (auto& it : render_context.semsOwnershipIsTransfered)
+            it.create();
         // 决定是否需要进行所有权转移
         render_context.ownership_transfer = true;
     }
-    render_context.maxFlightCount = c;
     render_context.curFrame = 0;
-    render_context.fences.reserve(c);
-    for (uint32_t i = 0; i < c; i++) {
-        render_context.fences.emplace_back(VK_FENCE_CREATE_SIGNALED_BIT);
-    }
-    render_context.semsImageAvaliable.resize(c);
-    render_context.semsRenderFinish.resize(c);
+    for (auto& it : render_context.fences)
+        it.create(VK_FENCE_CREATE_SIGNALED_BIT);
+    for (auto& it : render_context.semsImageAvaliable)
+        it.create();
+    for (auto& it : render_context.semsRenderFinish)
+        it.create();
     return VK_SUCCESS;
 CREATE_FAILED:
     _destroyRenderContext();
@@ -86,21 +77,20 @@ void _destroyRenderContext() {
     render_context.cmdPool_presentation.~CommandPool();
     render_context.cmdPool_graphics.~CommandPool();
     render_context.cmdPool_compute.~CommandPool();
-    render_context.fences.clear();
-    render_context.semsImageAvaliable.clear();
-    render_context.semsRenderFinish.clear();
-    render_context.semsOwnershipIsTransfered.clear();
+    for (auto& it : render_context.fences)
+        it.~Fence();
+    for (auto& it : render_context.semsImageAvaliable)
+        it.~Semaphore();
+    for (auto& it : render_context.semsRenderFinish)
+        it.~Semaphore();
+    for (auto& it : render_context.semsOwnershipIsTransfered)
+        it.~Semaphore();
 }
-void _createRenderLoop() {
-    pRenderpass_pack = new RenderPassPack();
-    pRenderPipeline = new RenderPipeline();
-}
-void _destroyRenderLoop() {
-    delete pRenderPipeline;
-    delete pRenderpass_pack;
-}
+void _createRenderLoop() {}
+void _destroyRenderLoop() {}
 VkResult submit_cmdBuffer_graphics_wait(VkCommandBuffer commandBuffer) {
     Fence fence;
+    fence.create();
     VkResult result;
     result = submit_cmdBuffer_graphics(commandBuffer, VkFence(fence));
     if (result)
@@ -123,6 +113,7 @@ VkResult submit_cmdBuffer_graphics(VkCommandBuffer commandBuffer,
 }
 VkResult submit_cmdBuffer_compute_wait(VkCommandBuffer commandBuffer) {
     Fence fence;
+    fence.create();
     VkResult result;
     result = submit_cmdBuffer_compute(commandBuffer, VkFence(fence));
     if (result)
@@ -186,7 +177,7 @@ VkResult submit_buffer_presentation(
     return result;
 }
 
-void render() {
+void render(RenderDataPack packet) {
     auto& vkInfo = context.vulkanInfo;
     auto& device = vkInfo.device;
     auto& swapchain = vkInfo.swapchain;
@@ -201,7 +192,7 @@ void render() {
     VkResult result = loop.fences[loop.curFrame].wait_and_reset();
     if (result != VK_SUCCESS) {
         print_error("render()", "wait for fence failed! Code:", result);
-        loop.curFrame = (loop.curFrame + 1) % loop.maxFlightCount;
+        loop.curFrame = (loop.curFrame + 1) % MAX_FLIGHT_NUM;
         return;
     }
     // 请求下一张图像，确保可用
@@ -216,15 +207,16 @@ void render() {
     curBuf.begin(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
     //----------------
     VkClearValue clearColor = {.color = {1.f, 0.f, 0.f, 1.f}};  // 红色
-    pRenderpass_pack->renderPass.cmd_begin(
-        curBuf, pRenderpass_pack->framebuffers[loop.curFrame],
+    packet.pRenderPass->renderPass.cmd_begin(
+        curBuf, packet.pRenderPass->framebuffers[loop.curFrame],
         {{}, window_size}, &clearColor, 1);
     vkCmdBindPipeline(curBuf, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                      VkPipeline(pRenderPipeline->renderPipeline));
+                      VkPipeline(packet.pRenderPipline->renderPipeline));
     VkDeviceSize offset = 0;
-    vkCmdBindVertexBuffers(curBuf, 0, 1, vertex_buffer.getPointer(), &offset);
+    vkCmdBindVertexBuffers(curBuf, 0, 1, packet.pVertexData->getPointer(),
+                           &offset);
     vkCmdDraw(curBuf, 3, 1, 0, 0);
-    pRenderpass_pack->renderPass.cmd_end(curBuf);
+    packet.pRenderPass->renderPass.cmd_end(curBuf);
     //----------------
     if (render_context.ownership_transfer) {
         _insertCmd_transfer_image_ownership(curBuf, image_index);
@@ -267,7 +259,7 @@ void render() {
     present_image(&image_index, 1,
                   loop.semsRenderFinish[loop.curFrame].getPointer());
     // 切换到下一帧
-    loop.curFrame = (loop.curFrame + 1) % loop.maxFlightCount;
+    loop.curFrame = (loop.curFrame + 1) % MAX_FLIGHT_NUM;
 }
 VkResult acquire_next_image(uint32_t* index,
                             VkSemaphore semsImageAvaliable,
@@ -319,7 +311,16 @@ VkResult present_image(uint32_t* index,
     }
     return VK_SUCCESS;
 }
-void RenderPassPack::create() {
+RenderPassPackBase::~RenderPassPackBase() {
+    removeCallback_CreateSwapchain(callback_c_id);
+    removeCallback_DestroySwapchain(callback_d_id);
+}
+RenderPipelineBase::~RenderPipelineBase() {
+    removeCallback_CreateSwapchain(callback_c_id);
+    removeCallback_DestroySwapchain(callback_d_id);
+}
+// render start up -----------------
+void RenderPassPack_simple1::create() {
     VkAttachmentDescription attachmentDescription = {
         .format = context.vulkanInfo.swapchainCreateInfo.imageFormat,
         .samples = VK_SAMPLE_COUNT_1_BIT,
@@ -367,27 +368,18 @@ void RenderPassPack::create() {
     };
     auto DestroyFramebuffers = [this] { framebuffers.clear(); };
     CreateFramebuffers();
-
     callback_c_id = addCallback_CreateSwapchain(CreateFramebuffers);
     callback_d_id = addCallback_DestroySwapchain(DestroyFramebuffers);
 }
-Vertex_2d vertices[] = {
-    { {  .0f, -.5f }, { 1, 0, 0, 1 } },//红色
-    { { -.5f,  .5f }, { 0, 1, 0, 1 } },//绿色
-    { {  .5f,  .5f }, { 0, 0, 1, 1 } } //蓝色
-};
-void RenderPipeline::create() {
-    shader.create(
-        "D:\\c++programs\\BoundlessVK\\BoundlessVK\\shader\\shader.shader");
-    vertex_buffer.allocate(sizeof(vertices),0,VK_BUFFER_USAGE_VERTEX_BUFFER_BIT ,VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT,VMA_MEMORY_USAGE_AUTO);
-    vertex_buffer.transfer_data(&vertices,sizeof(vertices));
-    auto Create = [this] {
+void RenderPipeline_simple1::create(Shader* pShader,
+                                    RenderPassPackBase* pRenderPass) {
+    auto Create = [this,pShader,pRenderPass] {
         VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo{
             .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
         layout.create(pipelineLayoutCreateInfo);
         PipelineCreateInfosPack pack;
         pack.createInfo.layout = VkPipelineLayout(layout);
-        pack.createInfo.renderPass = VkRenderPass(pRenderpass_pack->renderPass);
+        pack.createInfo.renderPass = VkRenderPass(pRenderPass->renderPass);
         pack.inputAssemblyStateCi.topology =
             VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
         pack.viewports.emplace_back(0.0f, 0.0f, float(window_size.width),
@@ -397,21 +389,17 @@ void RenderPipeline::create() {
         pack.colorBlendAttachmentStates.push_back(
             VkPipelineColorBlendAttachmentState{.colorWriteMask = 0b1111});
         // 0号顶点缓冲区
-        pack.vertexInputBindings.emplace_back(0, sizeof(Vertex_2d), VK_VERTEX_INPUT_RATE_VERTEX);
+        pack.vertexInputBindings.emplace_back(0, sizeof(Vertex_2d),
+                                              VK_VERTEX_INPUT_RATE_VERTEX);
         Vertex_2d::fill_attribute(pack.vertexInputAttributes);
         pack.update_all_arrays();
-        pack.createInfo.stageCount = shader.getStages().size();
-        pack.createInfo.pStages = shader.getStages().data();
+        pack.createInfo.stageCount = pShader->getStages().size();
+        pack.createInfo.pStages = pShader->getStages().data();
         renderPipeline.create(pack);
     };
     auto Destroy = [this] { renderPipeline.~Pipeline(); };
+    Create();
     callback_c_id = addCallback_CreateSwapchain(Create);
     callback_d_id = addCallback_DestroySwapchain(Destroy);
-    Create();
-}
-RenderPipeline::~RenderPipeline() {
-    removeCallback_CreateSwapchain(callback_c_id);
-    removeCallback_DestroySwapchain(callback_d_id);
-    vertex_buffer.~Buffer();
 }
 }  // namespace BL

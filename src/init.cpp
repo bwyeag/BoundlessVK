@@ -780,6 +780,7 @@ int addCallback_DestroySwapchain(std::function<void()> p) {
     return id++;
 }
 void removeCallback_CreateSwapchain(int id) {
+    if (id==0) return;
     auto it = context.callbacks_createSwapchain.find(id);
     if (it == context.callbacks_createSwapchain.end()) {
         print_error("Callback", "CreateSwapchain id not found:", id);
@@ -788,6 +789,7 @@ void removeCallback_CreateSwapchain(int id) {
     context.callbacks_createSwapchain.erase(it);
 }
 void removeCallback_DestroySwapchain(int id) {
+    if (id==0) return;
     auto it = context.callbacks_destroySwapchain.find(id);
     if (it == context.callbacks_destroySwapchain.end()) {
         print_error("Callback", "DestroySwapchain id not found:", id);

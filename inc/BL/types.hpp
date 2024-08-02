@@ -12,14 +12,18 @@ class Fence {
     VkFence handle = VK_NULL_HANDLE;
 
    public:
+    Fence() = default;
     Fence(VkFenceCreateInfo& createInfo) { create(createInfo); }
-    // 默认构造器创建未置位的栅栏
-    Fence(VkFenceCreateFlags flags = 0) { create(flags); }
+    Fence(VkFenceCreateFlags flags) { create(flags); }
     Fence(Fence&& other) noexcept {
         handle = other.handle;
         other.handle = VK_NULL_HANDLE;
     }
-    ~Fence() { vkDestroyFence(context.vulkanInfo.device, handle, nullptr); }
+    ~Fence() {
+        if (handle)
+            vkDestroyFence(context.vulkanInfo.device, handle, nullptr);
+        handle = VK_NULL_HANDLE;
+    }
     operator VkFence() { return handle; }
     VkFence* getPointer() { return &handle; }
     VkResult wait(uint64_t time = UINT64_MAX) const {
@@ -68,14 +72,16 @@ class Semaphore {
     VkSemaphore handle = VK_NULL_HANDLE;
 
    public:
+    Semaphore() = default;
     Semaphore(VkSemaphoreCreateInfo& createInfo) { create(createInfo); }
-    Semaphore() { create(); }
     Semaphore(Semaphore&& other) noexcept {
         handle = other.handle;
         other.handle = VK_NULL_HANDLE;
     }
     ~Semaphore() {
-        vkDestroySemaphore(context.vulkanInfo.device, handle, nullptr);
+        if (handle)
+            vkDestroySemaphore(context.vulkanInfo.device, handle, nullptr);
+        handle = VK_NULL_HANDLE;
     }
     operator VkSemaphore() { return handle; }
     VkSemaphore* getPointer() { return &handle; }
@@ -510,7 +516,7 @@ class Buffer {
            VmaAllocationCreateFlags vma_flag,
            VmaMemoryUsage vma_usage,
            VkSharingMode sharing_mode = VK_SHARING_MODE_EXCLUSIVE) {
-        allocate(size,vk_flag,vk_usage,vma_flag,vma_usage,sharing_mode);
+        allocate(size, vk_flag, vk_usage, vma_flag, vma_usage, sharing_mode);
     }
     Buffer(Buffer&& other) noexcept {
         handle = other.handle;

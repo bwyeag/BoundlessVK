@@ -23,15 +23,14 @@ struct Vertex_2d {
     vec2f position;
     vec4f color;
 
-    static void fill_attribute(std::vector<VkVertexInputBindingDescription>& v);
+    static void fill_attribute(
+        std::vector<VkVertexInputAttributeDescription>& v) {
+        v.reserve(2);
+        v.emplace_back(0, 0, VK_FORMAT_R32G32_SFLOAT,
+                       offsetof(Vertex_2d, position));
+        v.emplace_back(1, 0, VK_FORMAT_R32G32B32A32_SFLOAT,
+                       offsetof(Vertex_2d, color));
+    }
 };
-void Vertex_2d::fill_attribute(
-    std::vector<VkVertexInputBindingDescription>& v) {
-    v.reserve(2);
-    pack.vertexInputAttributes.emplace_back(0, 0, VK_FORMAT_R32G32_SFLOAT,
-                                            offsetof(Vertex_2d, position));
-    pack.vertexInputAttributes.emplace_back(1, 0, VK_FORMAT_R32G32B32A32_SFLOAT,
-                                            offsetof(Vertex_2d, color));
 }
-}  // namespace BL
 #endif  //!_BOUNDLESS_VERTEX_CXX_FILE_
