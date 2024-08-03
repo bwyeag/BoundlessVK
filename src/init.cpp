@@ -532,8 +532,15 @@ VkResult _createSwapchain(bool limitFrameRate,
         for (size_t i = 0; i < surfacePresentModeCount; i++)
             if (surfacePresentModes[i] == VK_PRESENT_MODE_MAILBOX_KHR) {
                 createInfo.presentMode = VK_PRESENT_MODE_MAILBOX_KHR;
+                print_log("Present Mode","VK_PRESENT_MODE_MAILBOX_KHR");
                 break;
             }
+    switch (createInfo.presentMode)
+    {
+    case VK_PRESENT_MODE_FIFO_KHR:
+        print_log("Present Mode","VK_PRESENT_MODE_MAILBOX_KHR");
+        break;
+    }
     createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
     createInfo.flags = flags;
     createInfo.surface = info.surface;

@@ -12,7 +12,7 @@ namespace BL {
 const uint32_t MAX_FLIGHT_NUM = 3;
 const bool FORCE_OWNERSHIP_TRANSFER = true;
 struct RenderContext {
-    uint32_t curFrame;
+    uint32_t curFrame, numFrame;
     std::array<CommandBuffer, MAX_FLIGHT_NUM> cmdBufs;
     std::array<Fence, MAX_FLIGHT_NUM> fences;
     std::array<Semaphore, MAX_FLIGHT_NUM> semsImageAvaliable;
@@ -31,6 +31,7 @@ struct RenderDataPack {
     RenderPassPackBase* pRenderPass;
     RenderPipelineBase* pRenderPipline;
     Buffer* pVertexData;
+    std::function<void(BL::CommandBuffer&, RenderDataPack&, uint32_t)> pRenderFunction;
 };
 extern RenderContext render_context;
 bool initVulkanRenderer();
@@ -39,7 +40,7 @@ VkResult _createRenderContext();
 void _destroyRenderContext();
 void _createRenderLoop();
 void _destroyRenderLoop();
-void render(RenderDataPack packet);
+void render(RenderDataPack& packet);
 VkResult submit_cmdBuffer_graphics_wait(VkCommandBuffer commandBuffer);
 VkResult submit_cmdBuffer_graphics(VkCommandBuffer commandBuffer,
                                    VkFence fence = VK_NULL_HANDLE);
@@ -115,10 +116,17 @@ class RenderPassPack_simple1 : public RenderPassPackBase {
 };
 class RenderPipeline_simple1 : public RenderPipelineBase {
    public:
+    Buffer uniformBuffer;
+    uint32_t uniformSize;
+    DescriptorSetLayout setLayout;
+    DescriptorPool descriptorPool;
+    std::array<DescriptorSet, MAX_FLIGHT_NUM> descriptorSets;
     virtual void create(Shader*, RenderPassPackBase*) override;
+    RenderPipeline_simple1() {}
     RenderPipeline_simple1(Shader* pShader, RenderPassPackBase* pRenderPass) {
         this->create(pShader, pRenderPass);
     }
+    virtual ~RenderPipeline_simple1() {}
 };
 }  // namespace BL
 #endif  //!_BOUNDLESS_RENDER_FILE_

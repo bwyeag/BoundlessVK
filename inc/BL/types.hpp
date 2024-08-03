@@ -514,36 +514,78 @@ class Buffer {
            VkBufferCreateFlags vk_flag,
            VkBufferUsageFlagBits vk_usage,
            VmaAllocationCreateFlags vma_flag,
-           VmaMemoryUsage vma_usage,
+           VmaMemoryUsage vma_usage = VMA_MEMORY_USAGE_AUTO,
            VkSharingMode sharing_mode = VK_SHARING_MODE_EXCLUSIVE) {
         allocate(size, vk_flag, vk_usage, vma_flag, vma_usage, sharing_mode);
     }
     Buffer(Buffer&& other) noexcept {
         handle = other.handle;
         other.handle = VK_NULL_HANDLE;
+        allocation = other.allocation;
+        other.allocation = VK_NULL_HANDLE;
     }
     operator VkBuffer() { return handle; }
     VkBuffer* getPointer() { return &handle; }
     operator VmaAllocation() { return allocation; }
     VmaAllocation getAllocation() { return allocation; }
     ~Buffer() {
-        if (handle) {
-            vmaDestroyBuffer(context.vulkanInfo.allocator, handle, allocation);
-        }
+        vmaDestroyBuffer(context.vulkanInfo.allocator, handle, allocation);
         handle = VK_NULL_HANDLE;
         allocation = VK_NULL_HANDLE;
     }
     VkResult transfer_data(const void* pData,
                            VkDeviceSize length,
                            VkDeviceSize offset = 0) {
-        return vmaCopyMemoryToAllocation(context.vulkanInfo.allocator, pData,
-                                         allocation, offset, length);
+        VkResult result = vmaCopyMemoryToAllocation(
+            context.vulkanInfo.allocator, pData, allocation, offset, length);
+        if (result) {
+            print_error("Buffer",
+                        "transfer_data() failed! Code:", int32_t(result));
+        }
+        return result;
     }
     VkResult retrieve_data(void* pData,
                            VkDeviceSize length,
                            VkDeviceSize offset = 0) {
-        return vmaCopyAllocationToMemory(context.vulkanInfo.allocator,
-                                         allocation, offset, pData, length);
+        VkResult result = vmaCopyAllocationToMemory(
+            context.vulkanInfo.allocator, allocation, offset, pData, length);
+        if (result) {
+            print_error("Buffer",
+                        "retrieve_data() failed! Code:", int32_t(result));
+        }
+        return result;
+    }
+    void* map_data() {
+        void* data = nullptr;
+        VkResult result =
+            vmaMapMemory(context.vulkanInfo.allocator, allocation, &data);
+        if (result) {
+            print_error("Buffer", "map_data() failed! Code:", int32_t(result));
+        }
+        return data;
+    }
+    void unmap_data() {
+        vmaUnmapMemory(context.vulkanInfo.allocator, allocation);
+    }
+    VkResult flush_data(VkDeviceSize offset = 0,
+                        VkDeviceSize length = VK_WHOLE_SIZE) {
+        VkResult result = vmaFlushAllocation(context.vulkanInfo.allocator,
+                                             allocation, offset, length);
+        if (result) {
+            print_error("Buffer",
+                        "flush_data() failed! Code:", int32_t(result));
+        }
+        return result;
+    }
+    VkResult invalidate_data(VkDeviceSize offset = 0,
+                             VkDeviceSize length = VK_WHOLE_SIZE) {
+        VkResult result = vmaInvalidateAllocation(context.vulkanInfo.allocator,
+                                                  allocation, offset, length);
+        if (result) {
+            print_error("Buffer",
+                        "invalidate_data() failed! Code:", int32_t(result));
+        }
+        return result;
     }
     VkResult allocate(VkBufferCreateInfo& createInfo,
                       VmaAllocationCreateInfo& allocInfo) {
@@ -590,7 +632,7 @@ class BufferView {
         other.handle = VK_NULL_HANDLE;
     }
     ~BufferView() {
-        if (!handle)
+        if (handle)
             vkDestroyBufferView(context.vulkanInfo.device, handle, nullptr);
         handle = VK_NULL_HANDLE;
     }
@@ -617,6 +659,268 @@ class BufferView {
         return create(createInfo);
     }
 };
+// 图像数据类
+// 指定格式时使用 vk_format_utils.h 的内容
+class Image {
+    VkImage handle = VK_NULL_HANDLE;
+    VmaAllocation allocation = VK_NULL_HANDLE;
+
+   public:
+    Image() = default;
+    Image(VkImageCreateInfo& createInfo, VmaAllocationCreateInfo& allocInfo) {
+        create(createInfo, allocInfo);
+    }
+    Image(Image&& other) noexcept {
+        handle = other.handle;
+        other.handle = VK_NULL_HANDLE;
+        allocation = other.allocation;
+        other.allocation = VK_NULL_HANDLE;
+    }
+    ~Image() {
+        vmaDestroyImage(context.vulkanInfo.allocator, handle, allocation);
+        handle = VK_NULL_HANDLE;
+        allocation = VK_NULL_HANDLE;
+    }
+    operator VkImage() { return handle; }
+    VkImage* getPointer() { return &handle; }
+    operator VmaAllocation() { return allocation; }
+    VmaAllocation getAllocation() { return allocation; }
+    VkResult create(VkImageCreateInfo& createInfo,
+                    VmaAllocationCreateInfo& allocInfo) {
+        VkResult result =
+            vmaCreateImage(context.vulkanInfo.allocator, &createInfo,
+                           &allocInfo, &handle, &allocation, nullptr);
+        if (result)
+            print_error("image",
+                        "Failed to create an image! Code:", int32_t(result));
+        return result;
+    }
+};
+class ImageView {
+    VkImageView handle = VK_NULL_HANDLE;
+
+   public:
+    ImageView() = default;
+    ImageView(VkImageViewCreateInfo& createInfo) { allocate(createInfo); }
+    ImageView(VkImage image,
+              VkImageViewType viewType,
+              VkFormat format,
+              const VkImageSubresourceRange& subresourceRange,
+              VkImageViewCreateFlags flags = 0) {
+        allocate(image, viewType, format, subresourceRange, flags);
+    }
+    ImageView(ImageView&& other) noexcept {
+        handle = other.handle;
+        other.handle = VK_NULL_HANDLE;
+    }
+    ~ImageView() {
+        if (handle)
+            vkDestroyImageView(context.vulkanInfo.device, handle, nullptr);
+        handle = VK_NULL_HANDLE;
+    }
+    operator VkImageView() { return handle; }
+    VkImageView* getPointer() { return &handle; }
+    VkResult allocate(VkImageViewCreateInfo& createInfo) {
+        VkResult result = vkCreateImageView(context.vulkanInfo.device,
+                                            &createInfo, nullptr, &handle);
+        if (result)
+            print_error("ImageView",
+                        "Failed to create an image view! "
+                        "Code:",
+                        int32_t(result));
+        return result;
+    }
+    VkResult allocate(VkImage image,
+                      VkImageViewType viewType,
+                      VkFormat format,
+                      const VkImageSubresourceRange& subresourceRange,
+                      VkImageViewCreateFlags flags = 0) {
+        VkImageViewCreateInfo createInfo = {
+            .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+            .flags = flags,
+            .image = image,
+            .viewType = viewType,
+            .format = format,
+            .subresourceRange = subresourceRange};
+        return allocate(createInfo);
+    }
+};
+class DescriptorSetLayout {
+    VkDescriptorSetLayout handle = VK_NULL_HANDLE;
+
+   public:
+    DescriptorSetLayout() = default;
+    DescriptorSetLayout(VkDescriptorSetLayoutCreateInfo& createInfo) {
+        create(createInfo);
+    }
+    DescriptorSetLayout(DescriptorSetLayout&& other) noexcept {
+        handle = other.handle;
+        other.handle = VK_NULL_HANDLE;
+    }
+    ~DescriptorSetLayout() {
+        if (handle)
+            vkDestroyDescriptorSetLayout(context.vulkanInfo.device, handle,
+                                         nullptr);
+        handle = VK_NULL_HANDLE;
+    }
+    operator VkDescriptorSetLayout() { return handle; }
+    VkDescriptorSetLayout* getPointer() { return &handle; }
+    VkResult create(VkDescriptorSetLayoutCreateInfo& createInfo) {
+        VkResult result = vkCreateDescriptorSetLayout(
+            context.vulkanInfo.device, &createInfo, nullptr, &handle);
+        if (result)
+            print_error("DescriptorSetLayout",
+                        "Failed to create a descriptor set layout! Code:",
+                        int32_t(result));
+        return result;
+    }
+};
+class DescriptorSet {
+    friend class DescriptorPool;
+    VkDescriptorSet handle = VK_NULL_HANDLE;
+
+   public:
+    DescriptorSet() = default;
+    DescriptorSet(DescriptorSet&& other) noexcept {
+        handle = other.handle;
+        other.handle = VK_NULL_HANDLE;
+    }
+    operator VkDescriptorSet() { return handle; }
+    VkDescriptorSet* getPointer() { return &handle; }
+    void write(const VkDescriptorImageInfo* pDescriptorImageInfos,
+               uint32_t descriptorInfoCount,
+               VkDescriptorType descriptorType,
+               uint32_t dstBinding = 0,
+               uint32_t dstArrayElement = 0) const {
+        VkWriteDescriptorSet writeDescriptorSet = {
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstSet = handle,
+            .dstBinding = dstBinding,
+            .dstArrayElement = dstArrayElement,
+            .descriptorCount = descriptorInfoCount,
+            .descriptorType = descriptorType,
+            .pImageInfo = pDescriptorImageInfos};
+        update(&writeDescriptorSet);
+    }
+    void write(const VkDescriptorBufferInfo* pDescriptorBufferInfos,
+               uint32_t descriptorInfoCount,
+               VkDescriptorType descriptorType,
+               uint32_t dstBinding = 0,
+               uint32_t dstArrayElement = 0) const {
+        VkWriteDescriptorSet writeDescriptorSet = {
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstSet = handle,
+            .dstBinding = dstBinding,
+            .dstArrayElement = dstArrayElement,
+            .descriptorCount = descriptorInfoCount,
+            .descriptorType = descriptorType,
+            .pBufferInfo = pDescriptorBufferInfos};
+        update(&writeDescriptorSet);
+    }
+    void write(const VkBufferView* pBufferViews,
+               uint32_t descriptorInfoCount,
+               VkDescriptorType descriptorType,
+               uint32_t dstBinding = 0,
+               uint32_t dstArrayElement = 0) const {
+        VkWriteDescriptorSet writeDescriptorSet = {
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstSet = handle,
+            .dstBinding = dstBinding,
+            .dstArrayElement = dstArrayElement,
+            .descriptorCount = descriptorInfoCount,
+            .descriptorType = descriptorType,
+            .pTexelBufferView = pBufferViews};
+        update(&writeDescriptorSet);
+    }
+    static void update(VkWriteDescriptorSet* write) {
+        vkUpdateDescriptorSets(context.vulkanInfo.device, 1, write, 0, nullptr);
+    }
+    static void update(VkWriteDescriptorSet* write, VkCopyDescriptorSet* copy) {
+        vkUpdateDescriptorSets(context.vulkanInfo.device, 1, write, 1, copy);
+    }
+    static void update(uint32_t writeCount,
+                       VkWriteDescriptorSet* writes,
+                       uint32_t copiesCount = 0,
+                       VkCopyDescriptorSet* copies = nullptr) {
+        vkUpdateDescriptorSets(context.vulkanInfo.device, writeCount, writes,
+                               copiesCount, copies);
+    }
+};
+class DescriptorPool {
+    VkDescriptorPool handle = VK_NULL_HANDLE;
+
+   public:
+    DescriptorPool() = default;
+    DescriptorPool(const VkDescriptorPoolCreateInfo& createInfo) {
+        create(createInfo);
+    }
+    DescriptorPool(uint32_t maxSetCount,
+                   uint32_t poolSizeCount,
+                   const VkDescriptorPoolSize* poolSizes,
+                   VkDescriptorPoolCreateFlags flags = 0) {
+        create(maxSetCount, poolSizeCount, poolSizes, flags);
+    }
+    DescriptorPool(DescriptorPool&& other) noexcept {
+        handle = other.handle;
+        other.handle = VK_NULL_HANDLE;
+    }
+    ~DescriptorPool() {
+        if (handle) {
+            vkDestroyDescriptorPool(context.vulkanInfo.device, handle, nullptr);
+        }
+        handle = VK_NULL_HANDLE;
+    }
+    operator VkDescriptorPool() { return handle; }
+    VkDescriptorPool* getPointer() { return &handle; }
+    // 分配描述符集
+    // setLayouts的数量必须等于sets的数量
+    VkResult allocate_sets(uint32_t setCount,
+                           VkDescriptorSet* sets,
+                           const VkDescriptorSetLayout* setLayouts) const {
+        VkDescriptorSetAllocateInfo allocateInfo = {
+            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+            .descriptorPool = handle,
+            .descriptorSetCount = setCount,
+            .pSetLayouts = setLayouts};
+        VkResult result = vkAllocateDescriptorSets(context.vulkanInfo.device,
+                                                   &allocateInfo, sets);
+        if (result) {
+            print_error("DescriptorPool",
+                        "Failed to allocate descriptor "
+                        "sets! Code:",
+                        int32_t(result));
+        }
+        return result;
+    }
+    VkResult free_sets(uint32_t setCount, VkDescriptorSet* sets) const {
+        VkResult result = vkFreeDescriptorSets(context.vulkanInfo.device,
+                                               handle, setCount, sets);
+        memset(sets, 0, setCount * sizeof(VkDescriptorSet));
+        return result;
+    }
+    VkResult create(const VkDescriptorPoolCreateInfo& createInfo) {
+        VkResult result = vkCreateDescriptorPool(context.vulkanInfo.device,
+                                                 &createInfo, nullptr, &handle);
+        if (result)
+            print_error("DescriptorPool",
+                        "Failed to create a descriptor "
+                        "pool! Code:",
+                        int32_t(result));
+        return result;
+    }
+    VkResult create(uint32_t maxSetCount,
+                    uint32_t poolSizeCount,
+                    const VkDescriptorPoolSize* poolSizes,
+                    VkDescriptorPoolCreateFlags flags = 0) {
+        VkDescriptorPoolCreateInfo createInfo = {
+            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+            .flags = flags,
+            .maxSets = maxSetCount,
+            .poolSizeCount = poolSizeCount,
+            .pPoolSizes = poolSizes};
+        return create(createInfo);
+    }
+};
 class QueryPool {
     VkQueryPool handle = VK_NULL_HANDLE;
 
@@ -629,12 +933,12 @@ class QueryPool {
                   0 /*VkQueryPoolCreateFlags flags*/) {
         create(queryType, queryCount, pipelineStatistics);
     }
-    VkQueryPool(VkQueryPool&& other) noexcept {
+    QueryPool(QueryPool&& other) noexcept {
         handle = other.handle;
         other.handle = VK_NULL_HANDLE;
     }
-    ~BufferView() {
-        if (!handle)
+    ~QueryPool() {
+        if (handle)
             vkDestroyQueryPool(context.vulkanInfo.device, handle, nullptr);
         handle = VK_NULL_HANDLE;
     }
@@ -697,7 +1001,7 @@ class QueryPool {
                                             &createInfo, nullptr, &handle);
         if (result)
             print_error("QueryPool", "Failed to create a query pool! Code:",
-                int32_t(result));
+                        int32_t(result));
         return result;
     }
     VkResult create(VkQueryType queryType,
@@ -705,8 +1009,8 @@ class QueryPool {
                     VkQueryPipelineStatisticFlags pipelineStatistics =
                         0 /*VkQueryPoolCreateFlags flags*/) {
         VkQueryPoolCreateInfo createInfo = {
-            .sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO.queryType =
-                queryType,
+            .sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO,
+            .queryType = queryType,
             .queryCount = queryCount,
             .pipelineStatistics = pipelineStatistics};
         return create(createInfo);

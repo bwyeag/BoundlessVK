@@ -177,7 +177,7 @@ VkResult submit_buffer_presentation(
     return result;
 }
 
-void render(RenderDataPack packet) {
+void render(RenderDataPack& packet) {
     auto& vkInfo = context.vulkanInfo;
     auto& device = vkInfo.device;
     auto& swapchain = vkInfo.swapchain;
@@ -206,17 +206,7 @@ void render(RenderDataPack packet) {
     }
     curBuf.begin(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
     //----------------
-    VkClearValue clearColor = {.color = {1.f, 0.f, 0.f, 1.f}};  // 红色
-    packet.pRenderPass->renderPass.cmd_begin(
-        curBuf, packet.pRenderPass->framebuffers[loop.curFrame],
-        {{}, window_size}, &clearColor, 1);
-    vkCmdBindPipeline(curBuf, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                      VkPipeline(packet.pRenderPipline->renderPipeline));
-    VkDeviceSize offset = 0;
-    vkCmdBindVertexBuffers(curBuf, 0, 1, packet.pVertexData->getPointer(),
-                           &offset);
-    vkCmdDraw(curBuf, 3, 1, 0, 0);
-    packet.pRenderPass->renderPass.cmd_end(curBuf);
+    packet.pRenderFunction(curBuf, packet, image_index);
     //----------------
     if (render_context.ownership_transfer) {
         _insertCmd_transfer_image_ownership(curBuf, image_index);
@@ -373,9 +363,44 @@ void RenderPassPack_simple1::create() {
 }
 void RenderPipeline_simple1::create(Shader* pShader,
                                     RenderPassPackBase* pRenderPass) {
-    auto Create = [this,pShader,pRenderPass] {
+    VkDescriptorSetLayoutBinding setLayoutBinding = {
+        .binding = 0,  // 描述符被绑定到0号binding
+        .descriptorType =
+            VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,  // 类型为uniform缓冲区
+        .descriptorCount = 1,                   // 个数是1个
+        .stageFlags =
+            VK_SHADER_STAGE_VERTEX_BIT  // 在顶点着色器阶段读取uniform缓冲区
+    };
+    VkDescriptorSetLayoutCreateInfo setLayoutCreateInfo = {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+        .bindingCount = 1,
+        .pBindings = &setLayoutBinding};
+    setLayout.create(setLayoutCreateInfo);
+    VkDescriptorPoolSize poolSizes[1] = {
+        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 3}};
+    descriptorPool.create(3, 1, poolSizes);
+    VkDescriptorSetLayout layouts[MAX_FLIGHT_NUM];
+    for (uint32_t i = 0; i < MAX_FLIGHT_NUM; i++) {
+        layouts[i] = VkDescriptorSetLayout(setLayout);
+    }
+    descriptorPool.allocate_sets(MAX_FLIGHT_NUM, descriptorSets[0].getPointer(),
+                                 layouts);
+    VkDeviceSize uniformAlignment = context.vulkanInfo.phyDeviceProperties
+                                        .limits.minUniformBufferOffsetAlignment;
+    VkDeviceSize offsets =
+        uniformAlignment * std::ceil(uniformSize / uniformAlignment);
+    VkDescriptorBufferInfo bufferInfo = {
+        .buffer = VkBuffer(uniformBuffer), .offset = 0, .range = uniformSize};
+    for (uint32_t i = 0; i < MAX_FLIGHT_NUM; i++) {
+        descriptorSets[i].write(&bufferInfo, 1,
+                                VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+        bufferInfo.offset += offsets;
+    }
+    auto Create = [this, pShader, pRenderPass] {
         VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo{
-            .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+            .setLayoutCount = 1,
+            .pSetLayouts = setLayout.getPointer()};
         layout.create(pipelineLayoutCreateInfo);
         PipelineCreateInfosPack pack;
         pack.createInfo.layout = VkPipelineLayout(layout);
@@ -397,7 +422,10 @@ void RenderPipeline_simple1::create(Shader* pShader,
         pack.createInfo.pStages = pShader->getStages().data();
         renderPipeline.create(pack);
     };
-    auto Destroy = [this] { renderPipeline.~Pipeline(); };
+    auto Destroy = [this] {
+        renderPipeline.~Pipeline();
+        layout.~PipelineLayout();
+    };
     Create();
     callback_c_id = addCallback_CreateSwapchain(Create);
     callback_d_id = addCallback_DestroySwapchain(Destroy);
