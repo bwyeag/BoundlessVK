@@ -502,6 +502,7 @@ class Pipeline {
     }
 };
 class Buffer {
+   protected:
     VkBuffer handle = VK_NULL_HANDLE;
     VmaAllocation allocation = VK_NULL_HANDLE;
 
@@ -512,7 +513,7 @@ class Buffer {
     }
     Buffer(VkDeviceSize size,
            VkBufferCreateFlags vk_flag,
-           VkBufferUsageFlagBits vk_usage,
+           VkBufferUsageFlags vk_usage,
            VmaAllocationCreateFlags vma_flag,
            VmaMemoryUsage vma_usage = VMA_MEMORY_USAGE_AUTO,
            VkSharingMode sharing_mode = VK_SHARING_MODE_EXCLUSIVE) {
@@ -600,7 +601,7 @@ class Buffer {
     }
     VkResult allocate(VkDeviceSize size,
                       VkBufferCreateFlags vk_flag,
-                      VkBufferUsageFlagBits vk_usage,
+                      VkBufferUsageFlags vk_usage,
                       VmaAllocationCreateFlags vma_flag,
                       VmaMemoryUsage vma_usage,
                       VkSharingMode sharing_mode = VK_SHARING_MODE_EXCLUSIVE) {
@@ -613,6 +614,61 @@ class Buffer {
         VmaAllocationCreateInfo allocInfo = {.flags = vma_flag,
                                              .usage = vma_usage};
         return allocate(createInfo, allocInfo);
+    }
+};
+inline VkDeviceSize calculate_block_alignment(VkDeviceSize size) {
+    static const VkDeviceSize uniformAlignment =
+        context.vulkanInfo.phyDeviceProperties.limits
+            .minUniformBufferOffsetAlignment;
+    return ((uniformAlignment + size - 1) & ~(uniformAlignment - 1));
+}
+class UniformBuffer : protected Buffer {
+   protected:
+    void* pBufferData;
+    VkDeviceSize blockOffset, blockSize;
+
+   public:
+    UniformBuffer() = default;
+    UniformBuffer(VkDeviceSize block_size,
+                  VkBufferCreateFlags flags = 0,
+                  VkBufferUsageFlags other_usage = 0,
+                  VkSharingMode sharing_mode = VK_SHARING_MODE_EXCLUSIVE) {
+        create(blockSize, flags, other_usage, sharing_mode);
+    }
+    UniformBuffer(UniformBuffer&& other) noexcept {
+        memcpy(this, &other, sizeof(UniformBuffer));
+        memset(&other, 0, sizeof(UniformBuffer));
+    }
+    operator VkBuffer() { return handle; }
+    VkBuffer* getPointer() { return &handle; }
+    ~UniformBuffer() {}
+    void transfer_data(const void* pData) {
+        for (uint32_t i = 0; i < MAX_FLIGHT_NUM; i++) {
+            memcpy((uint8_t*)pBufferData + i * blockOffset, pData, blockSize);
+        }
+        this->flush_data();
+    }
+    void* get_pdata() { return pBufferData; }
+    VkDeviceSize get_alignment() { return blockOffset; }
+    VkDeviceSize get_block_size() { return blockSize; }
+
+    VkResult create(VkDeviceSize block_size,
+                    VkBufferCreateFlags flags = 0,
+                    VkBufferUsageFlags other_usage = 0,
+                    VkSharingMode sharing_mode = VK_SHARING_MODE_EXCLUSIVE) {
+        blockOffset = calculate_block_alignment(block_size);
+        blockSize = block_size;
+        VkResult result = this->allocate(
+            blockOffset * MAX_FLIGHT_NUM, flags,
+            VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | other_usage,
+            VMA_ALLOCATION_CREATE_MAPPED_BIT |
+                VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT,
+            VMA_MEMORY_USAGE_AUTO, sharing_mode);
+        VmaAllocationInfo allocInfo;
+        vmaGetAllocationInfo(context.vulkanInfo.allocator, allocation,
+                             &allocInfo);
+        pBufferData = allocInfo.pMappedData;
+        return result;
     }
 };
 class BufferView {
@@ -743,6 +799,33 @@ class ImageView {
             .format = format,
             .subresourceRange = subresourceRange};
         return allocate(createInfo);
+    }
+};
+class Sampler {
+    VkSampler handle = VK_NULL_HANDLE;
+
+   public:
+    Sampler() = default;
+    Sampler(VkSamplerCreateInfo& createInfo) { create(createInfo); }
+    Sampler(Sampler&& other) noexcept {
+        handle = other.handle;
+        other.handle = VK_NULL_HANDLE;
+    }
+    ~Sampler() {
+        if (handle)
+            vkDestroySampler(context.vulkanInfo.device, handle, nullptr);
+        handle = VK_NULL_HANDLE;
+    }
+    operator VkSampler() { return handle; }
+    VkSampler* getPointer() { return &handle; }
+    VkResult create(VkSamplerCreateInfo& createInfo) {
+        VkResult result = vkCreateSampler(context.vulkanInfo.device,
+                                          &createInfo, nullptr, &handle);
+        if (result) {
+            print_error("Sampler",
+                        "Failed to create a Sampler! Code:", int32_t(result));
+        }
+        return result;
     }
 };
 class DescriptorSetLayout {
@@ -1014,6 +1097,62 @@ class QueryPool {
             .queryCount = queryCount,
             .pipelineStatistics = pipelineStatistics};
         return create(createInfo);
+    }
+};
+class OcclusionQueries {
+   protected:
+    QueryPool queryPool;
+    std::vector<uint32_t> occlusionResults;
+
+   public:
+    OcclusionQueries() = default;
+    OcclusionQueries(uint32_t capacity) { create(capacity); }
+    operator VkQueryPool() { return queryPool; }
+    VkQueryPool* getPointer() { return queryPool.getPointer(); }
+    uint32_t capacity() const { return occlusionResults.size(); }
+    uint32_t passing_sample_count(uint32_t index) const {
+        return occlusionResults[index];
+    }
+    void cmd_reset(VkCommandBuffer commandBuffer) const {
+        queryPool.cmd_reset(commandBuffer, 0, capacity());
+    }
+    void cmd_begin(VkCommandBuffer commandBuffer,
+                   uint32_t queryIndex,
+                   bool isPrecise = false) const {
+        queryPool.cmd_begin(commandBuffer, queryIndex, isPrecise);
+    }
+    void cmd_end(VkCommandBuffer commandBuffer, uint32_t queryIndex) const {
+        queryPool.cmd_end(commandBuffer, queryIndex);
+    }
+    /*常用于GPU-driven遮挡剔除*/
+    void cmd_copy_results(VkCommandBuffer commandBuffer,
+                          uint32_t firstQueryIndex,
+                          uint32_t queryCount,
+                          VkBuffer buffer_dst,
+                          VkDeviceSize offset_dst,
+                          VkDeviceSize stride) const {
+        // 需要等待查询结束以获取正确的数值，flags为VK_QUERY_RESULT_WAIT_BIT
+        queryPool.cmd_copy_results(commandBuffer, firstQueryIndex, queryCount,
+                                   buffer_dst, offset_dst, stride,
+                                   VK_QUERY_RESULT_WAIT_BIT);
+    }
+    void create(uint32_t capacity) {
+        occlusionResults.resize(capacity);
+        occlusionResults.shrink_to_fit();
+        queryPool.create(VK_QUERY_TYPE_OCCLUSION, capacity);
+    }
+    void recreate(uint32_t capacity) {
+        waitAll();
+        queryPool.~QueryPool();
+        create(capacity);
+    }
+    VkResult get_results(uint32_t queryCount) {
+        return queryPool.get_results(0, queryCount, queryCount * 4,
+                                     occlusionResults.data(), 4);
+    }
+    VkResult get_results() {
+        return queryPool.get_results(0, capacity(), capacity() * 4,
+                                     occlusionResults.data(), 4);
     }
 };
 }  // namespace BL

@@ -54,6 +54,7 @@ struct Context {
         return this->vulkanInfo.swapchainImageViews.size();
     }
 };
+const uint32_t MAX_FLIGHT_NUM = 3;
 extern Context context;
 void _iterateCallback_CreateSwapchain();
 void _iterateCallback_DestroySwapchain();

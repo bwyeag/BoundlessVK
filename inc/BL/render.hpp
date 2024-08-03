@@ -9,7 +9,6 @@
 
 #include <Eigen/Core>
 namespace BL {
-const uint32_t MAX_FLIGHT_NUM = 3;
 const bool FORCE_OWNERSHIP_TRANSFER = true;
 struct RenderContext {
     uint32_t curFrame, numFrame;
@@ -25,13 +24,8 @@ struct RenderContext {
     CommandBuffer cmdBuffer_transfer;
     bool ownership_transfer = false;
 };
-class RenderPassPackBase;
-class RenderPipelineBase;
-struct RenderDataPack {
-    RenderPassPackBase* pRenderPass;
-    RenderPipelineBase* pRenderPipline;
-    Buffer* pVertexData;
-    std::function<void(BL::CommandBuffer&, RenderDataPack&, uint32_t)> pRenderFunction;
+struct RenderDataPackBase{
+    std::function<void(CommandBuffer&, RenderDataPackBase&, uint32_t)> pRenderFunction;
 };
 extern RenderContext render_context;
 bool initVulkanRenderer();
@@ -40,7 +34,7 @@ VkResult _createRenderContext();
 void _destroyRenderContext();
 void _createRenderLoop();
 void _destroyRenderLoop();
-void render(RenderDataPack& packet);
+void render(RenderDataPackBase& packet);
 VkResult submit_cmdBuffer_graphics_wait(VkCommandBuffer commandBuffer);
 VkResult submit_cmdBuffer_graphics(VkCommandBuffer commandBuffer,
                                    VkFence fence = VK_NULL_HANDLE);
@@ -108,7 +102,6 @@ class RenderPipelineBase {
 };
 // ----------------------------------------------------------------------------
 // 实际类型的定义
-
 class RenderPassPack_simple1 : public RenderPassPackBase {
    public:
     virtual void create() override;
@@ -116,8 +109,7 @@ class RenderPassPack_simple1 : public RenderPassPackBase {
 };
 class RenderPipeline_simple1 : public RenderPipelineBase {
    public:
-    Buffer uniformBuffer;
-    uint32_t uniformSize;
+    UniformBuffer uniformBuffer;
     DescriptorSetLayout setLayout;
     DescriptorPool descriptorPool;
     std::array<DescriptorSet, MAX_FLIGHT_NUM> descriptorSets;
@@ -127,6 +119,11 @@ class RenderPipeline_simple1 : public RenderPipelineBase {
         this->create(pShader, pRenderPass);
     }
     virtual ~RenderPipeline_simple1() {}
+};
+struct RenderDataPack_simple1 : public RenderDataPackBase{
+    RenderPassPack_simple1* pRenderPass;
+    RenderPipeline_simple1* pRenderPipline;
+    Buffer* pVertexData;
 };
 }  // namespace BL
 #endif  //!_BOUNDLESS_RENDER_FILE_

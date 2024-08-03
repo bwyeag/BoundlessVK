@@ -177,7 +177,7 @@ VkResult submit_buffer_presentation(
     return result;
 }
 
-void render(RenderDataPack& packet) {
+void render(RenderDataPackBase& packet) {
     auto& vkInfo = context.vulkanInfo;
     auto& device = vkInfo.device;
     auto& swapchain = vkInfo.swapchain;
@@ -385,16 +385,12 @@ void RenderPipeline_simple1::create(Shader* pShader,
     }
     descriptorPool.allocate_sets(MAX_FLIGHT_NUM, descriptorSets[0].getPointer(),
                                  layouts);
-    VkDeviceSize uniformAlignment = context.vulkanInfo.phyDeviceProperties
-                                        .limits.minUniformBufferOffsetAlignment;
-    VkDeviceSize offsets =
-        uniformAlignment * std::ceil(uniformSize / uniformAlignment);
     VkDescriptorBufferInfo bufferInfo = {
-        .buffer = VkBuffer(uniformBuffer), .offset = 0, .range = uniformSize};
+        .buffer = VkBuffer(uniformBuffer), .offset = 0, .range = uniformBuffer.get_block_size()};
     for (uint32_t i = 0; i < MAX_FLIGHT_NUM; i++) {
         descriptorSets[i].write(&bufferInfo, 1,
                                 VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
-        bufferInfo.offset += offsets;
+        bufferInfo.offset += uniformBuffer.get_alignment();
     }
     auto Create = [this, pShader, pRenderPass] {
         VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo{
@@ -413,7 +409,6 @@ void RenderPipeline_simple1::create(Shader* pShader,
         pack.multisampleStateCi.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
         pack.colorBlendAttachmentStates.push_back(
             VkPipelineColorBlendAttachmentState{.colorWriteMask = 0b1111});
-        // 0号顶点缓冲区
         pack.vertexInputBindings.emplace_back(0, sizeof(Vertex_2d),
                                               VK_VERTEX_INPUT_RATE_VERTEX);
         Vertex_2d::fill_attribute(pack.vertexInputAttributes);
