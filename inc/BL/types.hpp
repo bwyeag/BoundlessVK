@@ -120,7 +120,7 @@ class CommandBuffer {
         VkResult result = vkBeginCommandBuffer(handle, &beginInfo);
         if (result) {
             print_error(
-                "commandBuffer",
+                "CommandBuffer",
                 "Failed to begin a command buffer! Code:", int32_t(result));
         }
         return result;
@@ -133,7 +133,7 @@ class CommandBuffer {
         VkResult result = vkBeginCommandBuffer(handle, &beginInfo);
         if (result) {
             print_error(
-                "commandBuffer",
+                "CommandBuffer",
                 "Failed to begin a command buffer! Code:", int32_t(result));
         }
         return result;
@@ -142,7 +142,7 @@ class CommandBuffer {
         VkResult result = vkEndCommandBuffer(handle);
         if (result) {
             print_error(
-                "commandBuffer",
+                "CommandBuffer",
                 "Failed to end a command buffer! Code:", int32_t(result));
         }
         return result;
@@ -248,15 +248,15 @@ class RenderPass {
     operator VkRenderPass() { return handle; }
     VkRenderPass* getPointer() { return &handle; }
     void cmd_begin(
-        VkCommandBuffer commandBuffer,
+        VkCommandBuffer cmdBuf,
         VkRenderPassBeginInfo& beginInfo,
         VkSubpassContents subpassContents = VK_SUBPASS_CONTENTS_INLINE) const {
         beginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
         beginInfo.renderPass = handle;
-        vkCmdBeginRenderPass(commandBuffer, &beginInfo, subpassContents);
+        vkCmdBeginRenderPass(cmdBuf, &beginInfo, subpassContents);
     }
     void cmd_begin(
-        VkCommandBuffer commandBuffer,
+        VkCommandBuffer cmdBuf,
         VkFramebuffer framebuffer,
         VkRect2D renderArea,
         const VkClearValue* clearValues = nullptr,
@@ -269,16 +269,14 @@ class RenderPass {
             .renderArea = renderArea,
             .clearValueCount = clearValuesCount,
             .pClearValues = clearValues};
-        vkCmdBeginRenderPass(commandBuffer, &beginInfo, subpassContents);
+        vkCmdBeginRenderPass(cmdBuf, &beginInfo, subpassContents);
     }
     void cmd_next(
-        VkCommandBuffer commandBuffer,
+        VkCommandBuffer cmdBuf,
         VkSubpassContents subpassContents = VK_SUBPASS_CONTENTS_INLINE) const {
-        vkCmdNextSubpass(commandBuffer, subpassContents);
+        vkCmdNextSubpass(cmdBuf, subpassContents);
     }
-    void cmd_end(VkCommandBuffer commandBuffer) const {
-        vkCmdEndRenderPass(commandBuffer);
-    }
+    void cmd_end(VkCommandBuffer cmdBuf) const { vkCmdEndRenderPass(cmdBuf); }
     VkResult create(VkRenderPassCreateInfo& createInfo) {
         createInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
         VkResult result = vkCreateRenderPass(context.vulkanInfo.device,
@@ -622,6 +620,159 @@ inline VkDeviceSize calculate_block_alignment(VkDeviceSize size) {
             .minUniformBufferOffsetAlignment;
     return ((uniformAlignment + size - 1) & ~(uniformAlignment - 1));
 }
+class IndexBuffer : protected Buffer {
+   public:
+    IndexBuffer() = default;
+    IndexBuffer(VkDeviceSize block_size,
+                VkBufferCreateFlags flags = 0,
+                VkBufferUsageFlags other_usage = 0,
+                VkSharingMode sharing_mode = VK_SHARING_MODE_EXCLUSIVE) {
+        create(block_size, flags, other_usage, sharing_mode);
+    }
+    IndexBuffer(IndexBuffer&& other) noexcept : Buffer(std::move(other)) {}
+    operator VkBuffer() { return handle; }
+    VkBuffer* getPointer() { return &handle; }
+    ~IndexBuffer() {}
+    VkResult create(VkDeviceSize block_size,
+                    VkBufferCreateFlags flags = 0,
+                    VkBufferUsageFlags other_usage = 0,
+                    VkSharingMode sharing_mode = VK_SHARING_MODE_EXCLUSIVE) {
+        VkResult result = this->allocate(
+            block_size, flags,
+            VK_BUFFER_USAGE_INDEX_BUFFER_BIT |
+                VK_BUFFER_USAGE_TRANSFER_DST_BIT | other_usage,
+            0, VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE, sharing_mode);
+        return result;
+    }
+};
+class VertexBuffer : protected Buffer {
+   public:
+    VertexBuffer() = default;
+    VertexBuffer(VkDeviceSize block_size,
+                 VkBufferCreateFlags flags = 0,
+                 VkBufferUsageFlags other_usage = 0,
+                 VkSharingMode sharing_mode = VK_SHARING_MODE_EXCLUSIVE) {
+        create(block_size, flags, other_usage, sharing_mode);
+    }
+    VertexBuffer(VertexBuffer&& other) noexcept : Buffer(std::move(other)) {}
+    operator VkBuffer() { return handle; }
+    VkBuffer* getPointer() { return &handle; }
+    ~VertexBuffer() {}
+    VkResult create(VkDeviceSize block_size,
+                    VkBufferCreateFlags flags = 0,
+                    VkBufferUsageFlags other_usage = 0,
+                    VkSharingMode sharing_mode = VK_SHARING_MODE_EXCLUSIVE) {
+        VkResult result = this->allocate(
+            block_size, flags,
+            VK_BUFFER_USAGE_VERTEX_BUFFER_BIT |
+                VK_BUFFER_USAGE_TRANSFER_DST_BIT | other_usage,
+            0, VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE, sharing_mode);
+        return result;
+    }
+};
+class TransferBuffer : protected Buffer {
+   protected:
+    void* pBufferData;
+    VkDeviceSize bufferSize;
+
+   public:
+    TransferBuffer() = default;
+    TransferBuffer(VkDeviceSize block_size,
+                   VkBufferCreateFlags flags = 0,
+                   VkBufferUsageFlags other_usage = 0,
+                   VkSharingMode sharing_mode = VK_SHARING_MODE_EXCLUSIVE) {
+        create(block_size, flags, other_usage, sharing_mode);
+    }
+    TransferBuffer(TransferBuffer&& other) noexcept
+        : Buffer(std::move(other)) {}
+    operator VkBuffer() { return handle; }
+    VkBuffer* getPointer() { return &handle; }
+    void* get_pdata() { return pBufferData; }
+    ~TransferBuffer() {}
+    VkResult resize(VkDeviceSize new_size,
+                    VkBufferCreateFlags flags = 0,
+                    VkBufferUsageFlags other_usage = 0,
+                    VkSharingMode sharing_mode = VK_SHARING_MODE_EXCLUSIVE) {
+        if (bufferSize >= new_size)
+            return VK_SUCCESS;
+        else {
+            vmaDestroyBuffer(context.vulkanInfo.allocator, handle, allocation);
+            return create(new_size, flags, other_usage, sharing_mode);
+        }
+    }
+    VkResult flush() { return this->flush_data(); }
+    VkResult flush(VkDeviceSize offset, VkDeviceSize length) {
+        return this->flush_data(offset, length);
+    }
+    VkResult transfer_data(const void* pData) {
+        memcpy(pBufferData, pData, bufferSize);
+        return this->flush_data();
+    }
+    VkResult transfer_data(const void* pData,
+                           VkDeviceSize offset,
+                           VkDeviceSize length) {
+        memcpy((uint8_t*)pBufferData + offset, pData, length);
+        return this->flush_data(offset, length);
+    }
+    void cmd_insert_transfer(VkCommandBuffer cmdBuf,
+                             VkBuffer dstBuf,
+                             const VkBufferCopy* copyInfos,
+                             uint32_t count = 1) {
+        vkCmdCopyBuffer(cmdBuf, handle, dstBuf, count, copyInfos);
+    }
+    VkResult transfer_to_buffer(VkQueue cmdPool,
+                                VkCommandBuffer cmdBuf,
+                                VkBuffer dstBuf,
+                                const VkBufferCopy* copyInfos,
+                                uint32_t count,
+                                VkFence fence) {
+        VkCommandBufferBeginInfo beginInfo = {
+            .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+            .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT};
+        VkResult result = vkBeginCommandBuffer(cmdBuf, &beginInfo);
+        if (result) {
+            print_error(
+                "TransferBuffer",
+                "Failed to begin a command buffer! Code:", int32_t(result));
+            return result;
+        }
+        vkCmdCopyBuffer(cmdBuf, handle, dstBuf, count, copyInfos);
+        result = vkEndCommandBuffer(cmdBuf);
+        if (result) {
+            print_error(
+                "TransferBuffer",
+                "Failed to end a command buffer! Code:", int32_t(result));
+            return result;
+        }
+        VkSubmitInfo submitInfo = {.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+                                   .commandBufferCount = 1,
+                                   .pCommandBuffers = &cmdBuf};
+        result = vkQueueSubmit(cmdPool, 1, &submitInfo, fence);
+        if (result) {
+            print_error(
+                "TransferBuffer",
+                "Failed to submit command! Code:", int32_t(result));
+            return result;
+        }
+        return VK_SUCCESS;
+    }
+    VkResult create(VkDeviceSize block_size,
+                    VkBufferCreateFlags flags = 0,
+                    VkBufferUsageFlags other_usage = 0,
+                    VkSharingMode sharing_mode = VK_SHARING_MODE_EXCLUSIVE) {
+        VkResult result = this->allocate(
+            block_size, flags, VK_BUFFER_USAGE_TRANSFER_SRC_BIT | other_usage,
+            VMA_ALLOCATION_CREATE_MAPPED_BIT |
+                VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT,
+            VMA_MEMORY_USAGE_AUTO_PREFER_HOST, sharing_mode);
+        VmaAllocationInfo allocInfo;
+        vmaGetAllocationInfo(context.vulkanInfo.allocator, allocation,
+                             &allocInfo);
+        pBufferData = allocInfo.pMappedData;
+        bufferSize = allocInfo.size;
+        return result;
+    }
+};
 class UniformBuffer : protected Buffer {
    protected:
     void* pBufferData;
@@ -635,13 +786,15 @@ class UniformBuffer : protected Buffer {
                   VkSharingMode sharing_mode = VK_SHARING_MODE_EXCLUSIVE) {
         create(blockSize, flags, other_usage, sharing_mode);
     }
-    UniformBuffer(UniformBuffer&& other) noexcept {
-        memcpy(this, &other, sizeof(UniformBuffer));
-        memset(&other, 0, sizeof(UniformBuffer));
+    UniformBuffer(UniformBuffer&& other) noexcept : Buffer(std::move(other)) {
+        pBufferData = other.pBufferData;
+        other.pBufferData = nullptr;
+        blockOffset = other.blockOffset;
+        blockSize = other.blockSize;
     }
     operator VkBuffer() { return handle; }
     VkBuffer* getPointer() { return &handle; }
-    ~UniformBuffer() {}
+    ~UniformBuffer() { pBufferData = nullptr; }
     void transfer_data(const void* pData) {
         for (uint32_t i = 0; i < MAX_FLIGHT_NUM; i++) {
             memcpy((uint8_t*)pBufferData + i * blockOffset, pData, blockSize);
@@ -1027,34 +1180,33 @@ class QueryPool {
     }
     operator VkQueryPool() { return handle; }
     VkQueryPool* getPointer() { return &handle; }
-    void cmd_reset(VkCommandBuffer commandBuffer,
+    void cmd_reset(VkCommandBuffer cmdBuf,
                    uint32_t firstQueryIndex,
                    uint32_t queryCount) const {
-        vkCmdResetQueryPool(commandBuffer, handle, firstQueryIndex, queryCount);
+        vkCmdResetQueryPool(cmdBuf, handle, firstQueryIndex, queryCount);
     }
-    void cmd_begin(VkCommandBuffer commandBuffer,
+    void cmd_begin(VkCommandBuffer cmdBuf,
                    uint32_t queryIndex,
                    VkQueryControlFlags flags = 0) const {
-        vkCmdBeginQuery(commandBuffer, handle, queryIndex, flags);
+        vkCmdBeginQuery(cmdBuf, handle, queryIndex, flags);
     }
-    void cmd_end(VkCommandBuffer commandBuffer, uint32_t queryIndex) const {
-        vkCmdEndQuery(commandBuffer, handle, queryIndex);
+    void cmd_end(VkCommandBuffer cmdBuf, uint32_t queryIndex) const {
+        vkCmdEndQuery(cmdBuf, handle, queryIndex);
     }
-    void cmd_write_timestamp(VkCommandBuffer commandBuffer,
+    void cmd_write_timestamp(VkCommandBuffer cmdBuf,
                              VkPipelineStageFlagBits pipelineStage,
                              uint32_t queryIndex) const {
-        vkCmdWriteTimestamp(commandBuffer, pipelineStage, handle, queryIndex);
+        vkCmdWriteTimestamp(cmdBuf, pipelineStage, handle, queryIndex);
     }
-    void cmd_copy_results(VkCommandBuffer commandBuffer,
+    void cmd_copy_results(VkCommandBuffer cmdBuf,
                           uint32_t firstQueryIndex,
                           uint32_t queryCount,
                           VkBuffer buffer_dst,
                           VkDeviceSize offset_dst,
                           VkDeviceSize stride,
                           VkQueryResultFlags flags = 0) const {
-        vkCmdCopyQueryPoolResults(commandBuffer, handle, firstQueryIndex,
-                                  queryCount, buffer_dst, offset_dst, stride,
-                                  flags);
+        vkCmdCopyQueryPoolResults(cmdBuf, handle, firstQueryIndex, queryCount,
+                                  buffer_dst, offset_dst, stride, flags);
     }
     VkResult get_results(uint32_t firstQueryIndex,
                          uint32_t queryCount,
@@ -1113,26 +1265,26 @@ class OcclusionQueries {
     uint32_t passing_sample_count(uint32_t index) const {
         return occlusionResults[index];
     }
-    void cmd_reset(VkCommandBuffer commandBuffer) const {
-        queryPool.cmd_reset(commandBuffer, 0, capacity());
+    void cmd_reset(VkCommandBuffer cmdBuf) const {
+        queryPool.cmd_reset(cmdBuf, 0, capacity());
     }
-    void cmd_begin(VkCommandBuffer commandBuffer,
+    void cmd_begin(VkCommandBuffer cmdBuf,
                    uint32_t queryIndex,
                    bool isPrecise = false) const {
-        queryPool.cmd_begin(commandBuffer, queryIndex, isPrecise);
+        queryPool.cmd_begin(cmdBuf, queryIndex, isPrecise);
     }
-    void cmd_end(VkCommandBuffer commandBuffer, uint32_t queryIndex) const {
-        queryPool.cmd_end(commandBuffer, queryIndex);
+    void cmd_end(VkCommandBuffer cmdBuf, uint32_t queryIndex) const {
+        queryPool.cmd_end(cmdBuf, queryIndex);
     }
     /*常用于GPU-driven遮挡剔除*/
-    void cmd_copy_results(VkCommandBuffer commandBuffer,
+    void cmd_copy_results(VkCommandBuffer cmdBuf,
                           uint32_t firstQueryIndex,
                           uint32_t queryCount,
                           VkBuffer buffer_dst,
                           VkDeviceSize offset_dst,
                           VkDeviceSize stride) const {
         // 需要等待查询结束以获取正确的数值，flags为VK_QUERY_RESULT_WAIT_BIT
-        queryPool.cmd_copy_results(commandBuffer, firstQueryIndex, queryCount,
+        queryPool.cmd_copy_results(cmdBuf, firstQueryIndex, queryCount,
                                    buffer_dst, offset_dst, stride,
                                    VK_QUERY_RESULT_WAIT_BIT);
     }

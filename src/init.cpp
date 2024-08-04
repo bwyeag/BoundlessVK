@@ -170,14 +170,15 @@ bool _createInstance() {
     createInfo.enabledExtensionCount = uint32_t(extensions.size());
     createInfo.ppEnabledExtensionNames = extensions.data();
 
-    if (vkCreateInstance(&createInfo, nullptr, &context.vulkanInfo.instance) !=
-        VK_SUCCESS) {
-        print_error("InitVulkan", "Vulkan instance create failed");
+    if (VkResult result = vkCreateInstance(&createInfo, nullptr,
+                                           &context.vulkanInfo.instance)) {
+        print_error("VulkanInit", "Vulkan instance create failed",
+                    int32_t(result));
         return false;
     }
-    print_log("Init", "Vulkan API Version:", VK_API_VERSION_MAJOR(apiVersion),
-              VK_API_VERSION_MINOR(apiVersion),
-              VK_API_VERSION_PATCH(apiVersion));
+    print_log(
+        "VulkanInit", "Vulkan API Version:", VK_API_VERSION_MAJOR(apiVersion),
+        VK_API_VERSION_MINOR(apiVersion), VK_API_VERSION_PATCH(apiVersion));
     return true;
 }
 #ifdef BL_DEBUG
@@ -453,7 +454,7 @@ VkResult _createSwapchain(bool limitFrameRate,
         surfaceCapabilities.minImageCount +
         (surfaceCapabilities.maxImageCount > surfaceCapabilities.minImageCount);
     createInfo.imageExtent =
-        surfaceCapabilities.currentExtent.width == -1
+        surfaceCapabilities.currentExtent.width == (~0u)
             ? VkExtent2D{std::clamp(context.windowInfo.width,
                                     surfaceCapabilities.minImageExtent.width,
                                     surfaceCapabilities.maxImageExtent.width),
@@ -532,15 +533,12 @@ VkResult _createSwapchain(bool limitFrameRate,
         for (size_t i = 0; i < surfacePresentModeCount; i++)
             if (surfacePresentModes[i] == VK_PRESENT_MODE_MAILBOX_KHR) {
                 createInfo.presentMode = VK_PRESENT_MODE_MAILBOX_KHR;
-                print_log("Present Mode","VK_PRESENT_MODE_MAILBOX_KHR");
                 break;
             }
-    switch (createInfo.presentMode)
-    {
-    case VK_PRESENT_MODE_FIFO_KHR:
-        print_log("Present Mode","VK_PRESENT_MODE_MAILBOX_KHR");
-        break;
-    }
+    if (createInfo.presentMode == VK_PRESENT_MODE_FIFO_KHR)
+        print_log("Present Mode", "VK_PRESENT_MODE_MAILBOX_KHR");
+    else if (createInfo.presentMode == VK_PRESENT_MODE_MAILBOX_KHR)
+        print_log("Present Mode", "VK_PRESENT_MODE_MAILBOX_KHR");
     createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
     createInfo.flags = flags;
     createInfo.surface = info.surface;
@@ -704,6 +702,7 @@ void _destroyHandles() {
     }
     if (info.surface)
         vkDestroySurfaceKHR(info.instance, info.surface, nullptr);
+#ifdef BL_DEBUG
     if (info.debugger) {
         PFN_vkDestroyDebugUtilsMessengerEXT DestroyDebugUtilsMessenger =
             reinterpret_cast<PFN_vkDestroyDebugUtilsMessengerEXT>(
@@ -712,6 +711,7 @@ void _destroyHandles() {
         if (DestroyDebugUtilsMessenger)
             DestroyDebugUtilsMessenger(info.instance, info.debugger, nullptr);
     }
+#endif  // BL_DEBUG
     vkDestroyInstance(info.instance, nullptr);
 }
 void _clearHandles() {
@@ -724,7 +724,9 @@ void _clearHandles() {
     info.swapchainImages.resize(0);
     info.swapchainImageViews.resize(0);
     info.swapchainCreateInfo = {};
+#ifdef BL_DEBUG
     info.debugger = VK_NULL_HANDLE;
+#endif  // BL_DEBUG
 }
 /*
  * VMA 相关函数
@@ -734,8 +736,8 @@ VmaAllocatorCreateFlags _getVMAflags(const std::vector<const char*>& ext) {
     for (uint32_t i = 0; i < ext.size(); i++) {
         for (uint32_t j = 0; j < vma_extcheck_count; j++) {
             if (std::strcmp(ext[i], vma_extensions[j]) == 0) {
-                //flag |= vma_ext_flag[j];
-                //print_log("Info", "VMA ext found:", ext[i]);
+                // flag |= vma_ext_flag[j];
+                // print_log("Info", "VMA ext found:", ext[i]);
             }
         }
     }
@@ -787,7 +789,8 @@ int addCallback_DestroySwapchain(std::function<void()> p) {
     return id++;
 }
 void removeCallback_CreateSwapchain(int id) {
-    if (id==0) return;
+    if (id == 0)
+        return;
     auto it = context.callbacks_createSwapchain.find(id);
     if (it == context.callbacks_createSwapchain.end()) {
         print_error("Callback", "CreateSwapchain id not found:", id);
@@ -796,7 +799,8 @@ void removeCallback_CreateSwapchain(int id) {
     context.callbacks_createSwapchain.erase(it);
 }
 void removeCallback_DestroySwapchain(int id) {
-    if (id==0) return;
+    if (id == 0)
+        return;
     auto it = context.callbacks_destroySwapchain.find(id);
     if (it == context.callbacks_destroySwapchain.end()) {
         print_error("Callback", "DestroySwapchain id not found:", id);

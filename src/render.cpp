@@ -409,9 +409,11 @@ void RenderPipeline_simple1::create(Shader* pShader,
         pack.multisampleStateCi.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
         pack.colorBlendAttachmentStates.push_back(
             VkPipelineColorBlendAttachmentState{.colorWriteMask = 0b1111});
+        //---------------------------------------------------------------------
         pack.vertexInputBindings.emplace_back(0, sizeof(Vertex_2d),
                                               VK_VERTEX_INPUT_RATE_VERTEX);
         Vertex_2d::fill_attribute(pack.vertexInputAttributes);
+        //---------------------------------------------------------------------
         pack.update_all_arrays();
         pack.createInfo.stageCount = pShader->getStages().size();
         pack.createInfo.pStages = pShader->getStages().data();

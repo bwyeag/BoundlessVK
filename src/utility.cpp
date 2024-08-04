@@ -1,7 +1,7 @@
 #include "utility.hpp"
 
 namespace BL {
-void compressData(const void* real_data,
+void compress_data(const void* real_data,
                   uint32_t length,
                   compressed_data** save,
                   uint32_t space,
@@ -24,7 +24,7 @@ void compressData(const void* real_data,
         print_error("compress", "Compressing failed! Code:", r);
     }
 }
-void uncompressData(const compressed_data* data, void** save) {
+void uncompress_data(const compressed_data* data, void** save) {
     uint32_t size = data->real_size;
     *save = malloc(size);
     if (*save == nullptr) {
@@ -39,7 +39,15 @@ void uncompressData(const compressed_data* data, void** save) {
         print_error("compress", "Uncompressing failed! Code:", r);
     }
 }
-uint32_t crcCheckSum(uint32_t crc, const uint8_t* data, uint32_t length) {
+void uncompress_data(const compressed_data* data, void* save) {
+    uint32_t size = data->real_size;
+    int r = uncompress((Bytef*)save, (uLongf*)&size, (Bytef*)data->data,
+                       (uLong)data->compress_size);
+    if (r != Z_OK) {
+        print_error("compress", "Uncompressing failed! Code:", r);
+    }
+}
+uint32_t crc32_check(uint32_t crc, const uint8_t* data, uint32_t length) {
     uint32_t ncrc = crc32(crc, (Bytef*)data, (uInt)length);
     return ncrc;
 }

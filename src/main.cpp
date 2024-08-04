@@ -1,5 +1,6 @@
 #include <BL/init.hpp>
 #include <BL/render.hpp>
+#include <BL/mesh.hpp>
 #include <cmath>
 #include <iostream>
 
@@ -39,8 +40,9 @@ int main() {
     BL::initVulkanRenderer();
     double t0 = glfwGetTime();
     {
+        BL::Mesh mesh("D:\\c++programs\\BoundlessVK\\BoundlessVK\\utility_program\\h_huan.mesh");
         //---------------------------------------------
-        BL::Shader shader(".\\shader.shader");
+        BL::Shader shader("D:\\c++programs\\BoundlessVK\\BoundlessVK\\shader\\shader.shader");
         BL::RenderPassPack_simple1 renderpass_pack;
         BL::RenderPipeline_simple1 renderPipeline;
 
