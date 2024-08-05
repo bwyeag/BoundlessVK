@@ -228,7 +228,7 @@ void RenderPipeline_3d_trans_simple1::create(
             VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,  // 类型为uniform缓冲区
         .descriptorCount = 1,                   // 个数是1个
         .stageFlags =
-            VK_SHADER_STAGE_VERTEX_BIT  // 在顶点着色器阶段读取uniform缓冲区
+            VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT  // 在顶点着色器阶段读取uniform缓冲区
     };
     VkDescriptorSetLayoutCreateInfo setLayoutCreateInfo = {
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
@@ -273,9 +273,9 @@ void RenderPipeline_3d_trans_simple1::create(
         pack.scissors.emplace_back(VkOffset2D{}, window_size);
 
         // 开启背面剔除
-        pack.rasterizationStateCi.cullMode = VK_CULL_MODE_BACK_BIT;
+        pack.rasterizationStateCi.cullMode = VK_CULL_MODE_FRONT_BIT;
         pack.rasterizationStateCi.lineWidth = 1.0f;
-        pack.rasterizationStateCi.polygonMode = VK_POLYGON_MODE_LINE;
+        pack.rasterizationStateCi.polygonMode = VK_POLYGON_MODE_FILL;
         pack.rasterizationStateCi.frontFace =
             VK_FRONT_FACE_COUNTER_CLOCKWISE;  // 默认值，为0
 
@@ -306,7 +306,7 @@ void render_funct_3d_trans_simple1(CommandBuffer& curBuf,
     RenderDataPack_3d_trans_simple1& packet =
         reinterpret_cast<RenderDataPack_3d_trans_simple1&>(packBase);
     uint32_t curFrame = render_context.curFrame;
-    VkClearValue clearValues[2] = {{.color = {1.0f, 1.0f, 1.0f, 1.0f}},
+    VkClearValue clearValues[2] = {{.color = {0.1f, 0.1f, 0.1f, 1.0f}},
                                    {.depthStencil = {1.0f, 0}}};
     packet.pRenderPass->renderPass.cmd_begin(
         curBuf, packet.pRenderPass->framebuffers[image_index],

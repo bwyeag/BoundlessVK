@@ -60,8 +60,15 @@ class RenderPipeline_3d_trans_simple1 : public RenderPipelineBase {
     virtual ~RenderPipeline_3d_trans_simple1() {}
 };
 struct UniformData_3d_trans_simple1 {
-    mat4f model[3];
+    vec4f lightColor;
+    vec4f lightPosition;
+    float ambientStrength;
+    float specularStrength;
+    float _nd[2];
+    vec4f objectColor;
+    vec4f cameraPos;
     mat4f cameraMat;
+    mat4f model;
 };
 struct RenderDataPack_3d_trans_simple1 : public RenderDataPackBase {
     RenderPassPack_3d_trans_simple1* pRenderPass;

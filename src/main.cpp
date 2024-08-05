@@ -39,20 +39,16 @@ int main() {
         modelTrans1.position = vec3f(0.0f, 0.0f, 0.0f);
         modelTrans1.rotate = quatf::Identity();
         modelTrans1.scale = vec3f(4.0f, 4.0f, 4.0f);
-        uniform_data.model[0] = modelTrans1.get_matrix();
-        ModelTransform modelTrans2;
-        modelTrans2.isEdited = true;
-        modelTrans2.position = vec3f(6.0f, 0.0f, 0.0f);
-        modelTrans2.rotate = rotate(vec3f(MATH_PI/2,0.0f,0.0f));
-        modelTrans2.scale = vec3f(2.0f, 2.0f, 2.0f);
-        uniform_data.model[1] = modelTrans2.get_matrix();
-        ModelTransform modelTrans3;
-        modelTrans3.isEdited = true;
-        modelTrans3.position = vec3f(0.0f, 3.0f, 0.0f);
-        modelTrans3.rotate = rotate(vec3f(-MATH_PI/2,0.0f,0.0f));
-        modelTrans3.scale = vec3f(2.0f, 2.0f, 2.0f);
-        uniform_data.model[2] = modelTrans3.get_matrix();
+        uniform_data.model = modelTrans1.get_matrix();
 
+        uniform_data.ambientStrength = 0.1f;
+        uniform_data.specularStrength = 0.5f;
+        uniform_data.lightColor = vec4f(1.0f, 1.0f, 1.0f, 1.0f);
+        uniform_data.lightPosition = vec4f(0.0f, 0.0f, 5.0f, 1.0f);
+        uniform_data.objectColor = vec4f(1.0f, 0.5f, 0.31f, 1.0f);
+
+        uniform_data.cameraPos = vec4f(camera.position.x(), camera.position.y(),
+                                       camera.position.z(), 1.0f);
 
         Mesh mesh(
             "D:\\c++programs\\BoundlessVK\\BoundlessVK\\utility_program\\h_"
@@ -77,8 +73,9 @@ int main() {
                 glfwWaitEvents();
             double t2 = glfwGetTime();
             modelTrans1.isEdited = true;
-            modelTrans1.rotate = rotate(vec3f(static_cast<float>(t2-t0),0.0f,0.0f));
-            uniform_data.model[0] = modelTrans1.get_matrix();
+            modelTrans1.rotate =
+                rotate(vec3f(static_cast<float>(t2 - t0), 0.0f, 0.0f));
+            uniform_data.model = modelTrans1.get_matrix();
             uniform_data.cameraMat = camera.get_proj_matrix(changedFlag) *
                                      camera.get_view_matrix(changedFlag);
             renderPipeline.uniformBuffer.transfer_data(&uniform_data);
