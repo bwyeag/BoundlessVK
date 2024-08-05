@@ -22,9 +22,9 @@ class Mesh {
     std::string name;
     IndexBuffer indexBuffer;
     std::vector<VertexBuffer> vertexBuffers;
+   public:
     MeshInfo info;
 
-   public:
     Mesh() = default;
     Mesh(std::string path, uint32_t baseBinding = 0);
     ~Mesh() {}

@@ -1,7 +1,7 @@
 #include <render.hpp>
 namespace BL {
 RenderContext render_context;
-const VkExtent2D& window_size =
+VkExtent2D const& window_size =
     context.vulkanInfo.swapchainCreateInfo.imageExtent;
 bool initVulkanRenderer() {
     VkResult result = _createRenderContext();
@@ -301,6 +301,27 @@ VkResult present_image(uint32_t* index,
     }
     return VK_SUCCESS;
 }
+static int depth_attachment_callback_create;
+static int depth_attachment_callback_destroy;
+void initDepthAttachment() {
+    render_context.depthFormat = VK_FORMAT_D24_UNORM_S8_UINT;
+    auto Create = []() {
+        render_context.depthAttachments.resize(
+            context.getSwapChainImageCount());
+        for (auto& it : render_context.depthAttachments) {
+            it.create(VK_FORMAT_D24_UNORM_S8_UINT, window_size);
+        }
+    };
+    auto Destroy = []() { render_context.depthAttachments.clear(); };
+    Create();
+    depth_attachment_callback_create = addCallback_CreateSwapchain(Create);
+    depth_attachment_callback_destroy = addCallback_DestroySwapchain(Destroy);
+}
+void destroyDepthAttachment() {
+    removeCallback_CreateSwapchain(depth_attachment_callback_create);
+    removeCallback_DestroySwapchain(depth_attachment_callback_destroy);
+    render_context.depthAttachments.clear();
+}
 RenderPassPackBase::~RenderPassPackBase() {
     removeCallback_CreateSwapchain(callback_c_id);
     removeCallback_DestroySwapchain(callback_d_id);
@@ -308,123 +329,5 @@ RenderPassPackBase::~RenderPassPackBase() {
 RenderPipelineBase::~RenderPipelineBase() {
     removeCallback_CreateSwapchain(callback_c_id);
     removeCallback_DestroySwapchain(callback_d_id);
-}
-// render start up -----------------
-void RenderPassPack_simple1::create() {
-    VkAttachmentDescription attachmentDescription = {
-        .format = context.vulkanInfo.swapchainCreateInfo.imageFormat,
-        .samples = VK_SAMPLE_COUNT_1_BIT,
-        .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-        .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-        .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-        .finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR};
-    VkAttachmentReference attachmentReference = {
-        0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL};
-    VkSubpassDescription subpassDescription = {
-        .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
-        .colorAttachmentCount = 1,
-        .pColorAttachments = &attachmentReference};
-    VkSubpassDependency subpassDependency = {
-        .srcSubpass = VK_SUBPASS_EXTERNAL,
-        .dstSubpass = 0,
-        .srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-        .dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-        .srcAccessMask = 0,
-        .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-        .dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT};
-    VkRenderPassCreateInfo renderPassCreateInfo = {
-        .attachmentCount = 1,
-        .pAttachments = &attachmentDescription,
-        .subpassCount = 1,
-        .pSubpasses = &subpassDescription,
-        .dependencyCount = 1,
-        .pDependencies = &subpassDependency};
-    renderPass.create(renderPassCreateInfo);
-
-    auto CreateFramebuffers = [this] {
-        framebuffers.resize(context.getSwapChainImageCount());
-        VkFramebufferCreateInfo framebufferCreateInfo = {
-            .renderPass = renderPass,
-            .attachmentCount = 1,
-            .width = window_size.width,
-            .height = window_size.height,
-            .layers = 1};
-        VkImageView attachment;
-        for (size_t i = 0; i < context.getSwapChainImageCount(); i++) {
-            attachment = context.vulkanInfo.swapchainImageViews[i];
-            framebufferCreateInfo.pAttachments = &attachment;
-            framebuffers[i].create(framebufferCreateInfo);
-        }
-    };
-    auto DestroyFramebuffers = [this] { framebuffers.clear(); };
-    CreateFramebuffers();
-    callback_c_id = addCallback_CreateSwapchain(CreateFramebuffers);
-    callback_d_id = addCallback_DestroySwapchain(DestroyFramebuffers);
-}
-void RenderPipeline_simple1::create(Shader* pShader,
-                                    RenderPassPackBase* pRenderPass) {
-    VkDescriptorSetLayoutBinding setLayoutBinding = {
-        .binding = 0,  // 描述符被绑定到0号binding
-        .descriptorType =
-            VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,  // 类型为uniform缓冲区
-        .descriptorCount = 1,                   // 个数是1个
-        .stageFlags =
-            VK_SHADER_STAGE_VERTEX_BIT  // 在顶点着色器阶段读取uniform缓冲区
-    };
-    VkDescriptorSetLayoutCreateInfo setLayoutCreateInfo = {
-        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-        .bindingCount = 1,
-        .pBindings = &setLayoutBinding};
-    setLayout.create(setLayoutCreateInfo);
-    VkDescriptorPoolSize poolSizes[1] = {
-        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 3}};
-    descriptorPool.create(3, 1, poolSizes);
-    VkDescriptorSetLayout layouts[MAX_FLIGHT_NUM];
-    for (uint32_t i = 0; i < MAX_FLIGHT_NUM; i++) {
-        layouts[i] = VkDescriptorSetLayout(setLayout);
-    }
-    descriptorPool.allocate_sets(MAX_FLIGHT_NUM, descriptorSets[0].getPointer(),
-                                 layouts);
-    VkDescriptorBufferInfo bufferInfo = {
-        .buffer = VkBuffer(uniformBuffer), .offset = 0, .range = uniformBuffer.get_block_size()};
-    for (uint32_t i = 0; i < MAX_FLIGHT_NUM; i++) {
-        descriptorSets[i].write(&bufferInfo, 1,
-                                VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
-        bufferInfo.offset += uniformBuffer.get_alignment();
-    }
-    auto Create = [this, pShader, pRenderPass] {
-        VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo{
-            .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-            .setLayoutCount = 1,
-            .pSetLayouts = setLayout.getPointer()};
-        layout.create(pipelineLayoutCreateInfo);
-        PipelineCreateInfosPack pack;
-        pack.createInfo.layout = VkPipelineLayout(layout);
-        pack.createInfo.renderPass = VkRenderPass(pRenderPass->renderPass);
-        pack.inputAssemblyStateCi.topology =
-            VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-        pack.viewports.emplace_back(0.0f, 0.0f, float(window_size.width),
-                                    float(window_size.height), 0.f, 1.f);
-        pack.scissors.emplace_back(VkOffset2D{}, window_size);
-        pack.multisampleStateCi.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
-        pack.colorBlendAttachmentStates.push_back(
-            VkPipelineColorBlendAttachmentState{.colorWriteMask = 0b1111});
-        //---------------------------------------------------------------------
-        pack.vertexInputBindings.emplace_back(0, sizeof(Vertex_2d),
-                                              VK_VERTEX_INPUT_RATE_VERTEX);
-        Vertex_2d::fill_attribute(pack.vertexInputAttributes);
-        //---------------------------------------------------------------------
-        pack.update_all_arrays();
-        pack.createInfo.stageCount = pShader->getStages().size();
-        pack.createInfo.pStages = pShader->getStages().data();
-        renderPipeline.create(pack);
-    };
-    auto Destroy = [this] {
-        renderPipeline.~Pipeline();
-        layout.~PipelineLayout();
-    };
-    Create();
-    callback_c_id = addCallback_CreateSwapchain(Create);
-    callback_d_id = addCallback_DestroySwapchain(Destroy);
 }
 }  // namespace BL

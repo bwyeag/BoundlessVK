@@ -110,4 +110,13 @@ mat4f look_forward(const vec3f& eye, const vec3f& forward, const vec3f& up) {
 
     return _look_matrix(eye,f,s,u);
 }
+quatf rotate(const vec3f eulerAngle) /*欧拉角转四元数*/ {
+    Eigen::AngleAxisf rollAngle(Eigen::AngleAxisf(eulerAngle.x(), vec3f::UnitX()));
+    Eigen::AngleAxisf pitchAngle(Eigen::AngleAxisf(eulerAngle.y(), vec3f::UnitY()));
+    Eigen::AngleAxisf yawAngle(Eigen::AngleAxisf(eulerAngle.z(), vec3f::UnitZ()));
+
+    quatf quaternion;
+    quaternion = yawAngle * pitchAngle * rollAngle;
+    return quaternion;
+}
 }  // namespace BL

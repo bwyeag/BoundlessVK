@@ -4,7 +4,7 @@
 #include <cstdint>
 #include "init.hpp"
 #include "shader.hpp"
-#include "types.hpp"
+#include "types_plus.hpp"
 #include "vertex.hpp"
 
 #include <Eigen/Core>
@@ -23,11 +23,15 @@ struct RenderContext {
     CommandPool cmdPool_presentation;
     CommandBuffer cmdBuffer_transfer;
     bool ownership_transfer = false;
+
+    VkFormat depthFormat;
+    std::vector<DepthStencilAttachment> depthAttachments;
 };
 struct RenderDataPackBase{
     std::function<void(CommandBuffer&, RenderDataPackBase&, uint32_t)> pRenderFunction;
 };
 extern RenderContext render_context;
+extern VkExtent2D const& window_size;
 bool initVulkanRenderer();
 void terminateVulkanRenderer();
 VkResult _createRenderContext();
@@ -55,6 +59,12 @@ VkResult acquire_next_image(uint32_t* index,
 VkResult present_image(uint32_t* index,
                        uint32_t waitSemsCount = 0,
                        VkSemaphore* sems = nullptr);
+/*
+ *   其他部分的初始化
+ */
+void initDepthAttachment();
+void destroyDepthAttachment();
+
 
 // 渲染的渲染通道的基类，负责（基类）对象的销毁及移动，创建由子类重写create()方法实现
 // 子类需要实现渲染通道创建，帧缓冲创建和回调函数设置。创建即初始化
@@ -98,32 +108,7 @@ class RenderPipelineBase {
         other.callback_d_id = 0;
     }
     virtual ~RenderPipelineBase() = 0;
-    virtual void create(Shader*, RenderPassPackBase*) = 0;
-};
-// ----------------------------------------------------------------------------
-// 实际类型的定义
-class RenderPassPack_simple1 : public RenderPassPackBase {
-   public:
-    virtual void create() override;
-    RenderPassPack_simple1() { this->create(); }
-};
-class RenderPipeline_simple1 : public RenderPipelineBase {
-   public:
-    UniformBuffer uniformBuffer;
-    DescriptorSetLayout setLayout;
-    DescriptorPool descriptorPool;
-    std::array<DescriptorSet, MAX_FLIGHT_NUM> descriptorSets;
-    virtual void create(Shader*, RenderPassPackBase*) override;
-    RenderPipeline_simple1() {}
-    RenderPipeline_simple1(Shader* pShader, RenderPassPackBase* pRenderPass) {
-        this->create(pShader, pRenderPass);
-    }
-    virtual ~RenderPipeline_simple1() {}
-};
-struct RenderDataPack_simple1 : public RenderDataPackBase{
-    RenderPassPack_simple1* pRenderPass;
-    RenderPipeline_simple1* pRenderPipline;
-    Buffer* pVertexData;
+    virtual void create(Shader*, RenderPassPackBase*,void*) = 0;
 };
 }  // namespace BL
 #endif  //!_BOUNDLESS_RENDER_FILE_

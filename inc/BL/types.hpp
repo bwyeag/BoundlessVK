@@ -340,8 +340,7 @@ struct PipelineCreateInfosPack {
     uint32_t dynamicScissorCount = 1;
     // 光栅化
     VkPipelineRasterizationStateCreateInfo rasterizationStateCi = {
-        .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
-        .cullMode = VK_CULL_MODE_NONE};
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO};
     // 多重采样
     VkPipelineMultisampleStateCreateInfo multisampleStateCi = {
         VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO};
@@ -1305,6 +1304,82 @@ class OcclusionQueries {
     VkResult get_results() {
         return queryPool.get_results(0, capacity(), capacity() * 4,
                                      occlusionResults.data(), 4);
+    }
+};
+class Event {
+    VkEvent handle = VK_NULL_HANDLE;
+
+   public:
+    Event() = default;
+    Event(VkEventCreateInfo& createInfo) { create(createInfo); }
+    Event(Event&& other) noexcept {
+        handle = other.handle;
+        other.handle = VK_NULL_HANDLE;
+    }
+    ~Event() {
+        if (handle)
+            vkDestroyEvent(context.vulkanInfo.device, handle, nullptr);
+        handle = VK_NULL_HANDLE;
+    }
+    operator VkEvent() { return handle; }
+    VkEvent* getPointer() { return &handle; }
+    void cmd_set(VkCommandBuffer commandBuffer,
+                 VkPipelineStageFlags stage_from) const {
+        vkCmdSetEvent(commandBuffer, handle, stage_from);
+    }
+    void cmd_reset(VkCommandBuffer commandBuffer,
+                   VkPipelineStageFlags stage_from) const {
+        vkCmdResetEvent(commandBuffer, handle, stage_from);
+    }
+    void cmd_wait(VkCommandBuffer commandBuffer,
+                  VkPipelineStageFlags stage_from,
+                  VkPipelineStageFlags stage_to,
+                  VkMemoryBarrier* memoryBarriers,
+                  uint32_t memoryBarrierCount,
+                  VkBufferMemoryBarrier* bufferMemoryBarriers,
+                  uint32_t bufferMemoryBarrierCount,
+                  VkImageMemoryBarrier* imageMemoryBarriers,
+                  uint32_t imageMemoryBarrierCount) const {
+        vkCmdWaitEvents(commandBuffer, 1, &handle, stage_from, stage_to,
+                        memoryBarrierCount, memoryBarriers,
+                        bufferMemoryBarrierCount, bufferMemoryBarriers,
+                        imageMemoryBarrierCount, imageMemoryBarriers);
+    }
+    VkResult set() const {
+        VkResult result = vkSetEvent(context.vulkanInfo.device, handle);
+        if (result)
+            print_error("Event",
+                        "Failed to singal the event! Code:", int32_t(result));
+        return result;
+    }
+    VkResult reset() const {
+        VkResult result = vkResetEvent(context.vulkanInfo.device, handle);
+        if (result)
+            print_error("Event",
+                        "Failed to unsingal the event! Code:", int32_t(result));
+        return result;
+    }
+    VkResult status() const {
+        VkResult result = vkGetEventStatus(context.vulkanInfo.device, handle);
+        if (result < 0)  // vkGetEventStatus(...)成功时有两种结果
+            print_error("Event",
+                        "Failed to get the status of the "
+                        "event! Code:",
+                        int32_t(result));
+        return result;
+    }
+    VkResult create(VkEventCreateInfo& createInfo) {
+        VkResult result = vkCreateEvent(context.vulkanInfo.device, &createInfo,
+                                        nullptr, &handle);
+        if (result)
+            print_error("Event",
+                        "Failed to create a event! Code:", int32_t(result));
+        return result;
+    }
+    VkResult create(VkEventCreateFlags flags = 0) {
+        VkEventCreateInfo createInfo = {
+            .sType = VK_STRUCTURE_TYPE_EVENT_CREATE_INFO, .flags = flags};
+        return create(createInfo);
     }
 };
 }  // namespace BL

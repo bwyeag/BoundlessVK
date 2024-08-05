@@ -48,6 +48,7 @@ mat4f perspective(float fov,
 mat4f infinite_perspective(float fov, float aspect, float zNear);
 mat4f look_at(const vec3f& eye, const vec3f& center, const vec3f& up);
 mat4f look_forward(const vec3f& eye, const vec3f& forward, const vec3f& up);
+quatf rotate(const vec3f eulerAngle) /*欧拉角转四元数*/;
 struct ModelTransform {
     mutable mat4f modelMatrix;
     vec3f position;
@@ -95,14 +96,15 @@ struct CameraTransform {
     mutable bool isViewEdited = true;
     mutable bool isProjEdited = true;
 
-    const mat4f& get_view_matrix() const {
+    const mat4f& get_view_matrix(bool& changed) const {
         if (isViewEdited) {
             viewMatrix = look_forward(position, forward, up);
             isViewEdited = false;
+            changed = true;
         }
         return viewMatrix;
     }
-    const mat4f& get_proj_matrix() const {
+    const mat4f& get_proj_matrix(bool& changed) const {
         float width = context.vulkanInfo.swapchainCreateInfo.imageExtent.width;
         float height =
             context.vulkanInfo.swapchainCreateInfo.imageExtent.height;
@@ -116,6 +118,7 @@ struct CameraTransform {
                                    height / 2, zNear, zFar);
             }
             isProjEdited = false;
+            changed = true;
         }
         return projMatrix;
     }
