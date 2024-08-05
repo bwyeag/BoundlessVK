@@ -340,7 +340,8 @@ struct PipelineCreateInfosPack {
     uint32_t dynamicScissorCount = 1;
     // 光栅化
     VkPipelineRasterizationStateCreateInfo rasterizationStateCi = {
-        VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO};
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
+        .cullMode = VK_CULL_MODE_NONE};
     // 多重采样
     VkPipelineMultisampleStateCreateInfo multisampleStateCi = {
         VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO};
@@ -749,9 +750,8 @@ class TransferBuffer : protected Buffer {
                                    .pCommandBuffers = &cmdBuf};
         result = vkQueueSubmit(cmdPool, 1, &submitInfo, fence);
         if (result) {
-            print_error(
-                "TransferBuffer",
-                "Failed to submit command! Code:", int32_t(result));
+            print_error("TransferBuffer",
+                        "Failed to submit command! Code:", int32_t(result));
             return result;
         }
         return VK_SUCCESS;
