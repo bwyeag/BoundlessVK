@@ -11,7 +11,6 @@ bool initVulkanRenderer() {
     return true;
 }
 void terminateVulkanRenderer() {
-    _destroyRenderLoop();
     _destroyRenderContext();
 }
 VkResult _createRenderContext() {
@@ -86,8 +85,6 @@ void _destroyRenderContext() {
     for (auto& it : render_context.semsOwnershipIsTransfered)
         it.~Semaphore();
 }
-void _createRenderLoop() {}
-void _destroyRenderLoop() {}
 VkResult submit_cmdBuffer_graphics_wait(VkCommandBuffer commandBuffer) {
     Fence fence;
     fence.create();

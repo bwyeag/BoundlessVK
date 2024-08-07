@@ -616,7 +616,7 @@ class Buffer {
 };
 inline VkDeviceSize calculate_block_alignment(VkDeviceSize size) {
     static const VkDeviceSize uniformAlignment =
-        context.vulkanInfo.phyDeviceProperties.limits
+        context.vulkanInfo.phyDeviceProperties.properties.limits
             .minUniformBufferOffsetAlignment;
     return ((uniformAlignment + size - 1) & ~(uniformAlignment - 1));
 }

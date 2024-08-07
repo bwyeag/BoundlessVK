@@ -149,26 +149,26 @@ std::vector<const char*> _getInstanceLayer() {
     return layers;
 }
 bool _createInstance() {
-    uint32_t apiVersion = VK_API_VERSION_1_3;
-    VkApplicationInfo appInfo = {};
-    appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-    appInfo.apiVersion = apiVersion;
-    appInfo.engineVersion = VK_MAKE_API_VERSION(0, 0, 1, 0);
-    appInfo.applicationVersion = VK_MAKE_API_VERSION(0, 0, 1, 0);
-    appInfo.pApplicationName = "Triangle";
-    appInfo.pEngineName = "None";
+    VkApplicationInfo appInfo = {
+        .sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
+        .pApplicationName = "Boundless",
+        .applicationVersion = VK_MAKE_API_VERSION(0, 0, 1, 0),
+        .pEngineName = "BL",
+        .engineVersion = VK_MAKE_API_VERSION(0, 0, 1, 0),
+        .apiVersion = API_VERSION,
+    };
 
     auto extensions = _getInstanceExtension();
     auto layers = _getInstanceLayer();
 
-    VkInstanceCreateInfo createInfo = {};
-    createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
-    createInfo.flags = 0;
-    createInfo.pApplicationInfo = &appInfo;
-    createInfo.enabledLayerCount = uint32_t(layers.size());
-    createInfo.ppEnabledLayerNames = layers.data();
-    createInfo.enabledExtensionCount = uint32_t(extensions.size());
-    createInfo.ppEnabledExtensionNames = extensions.data();
+    VkInstanceCreateInfo createInfo = {
+        .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
+        .flags = 0,
+        .pApplicationInfo = &appInfo,
+        .enabledLayerCount = uint32_t(layers.size()),
+        .ppEnabledLayerNames = layers.data(),
+        .enabledExtensionCount = uint32_t(extensions.size()),
+        .ppEnabledExtensionNames = extensions.data()};
 
     if (VkResult result = vkCreateInstance(&createInfo, nullptr,
                                            &context.vulkanInfo.instance)) {
@@ -177,8 +177,8 @@ bool _createInstance() {
         return false;
     }
     print_log(
-        "VulkanInit", "Vulkan API Version:", VK_API_VERSION_MAJOR(apiVersion),
-        VK_API_VERSION_MINOR(apiVersion), VK_API_VERSION_PATCH(apiVersion));
+        "VulkanInit", "Vulkan API Version:", VK_API_VERSION_MAJOR(API_VERSION),
+        VK_API_VERSION_MINOR(API_VERSION), VK_API_VERSION_PATCH(API_VERSION));
     return true;
 }
 #ifdef BL_DEBUG
@@ -350,7 +350,8 @@ std::vector<VkExtensionProperties> _getDeviceExtensions() {
 VkResult _createDevice(VmaAllocatorCreateFlags* out_flag) {
     auto& info = context.vulkanInfo;
     float queuePriority = 1.0f;
-    VkDeviceQueueCreateInfo queueCreateInfos[3] = {
+    // 1.构建队列创建表
+    VkDeviceQueueCreateInfo queue_create_infos[3] = {
         {.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
          .queueCount = 1,
          .pQueuePriorities = &queuePriority},
@@ -360,35 +361,94 @@ VkResult _createDevice(VmaAllocatorCreateFlags* out_flag) {
         {.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
          .queueCount = 1,
          .pQueuePriorities = &queuePriority}};
-    uint32_t queueCreateInfoCount = 0;
-    uint32_t& qInd_graphics = info.queueFamilyIndex_graphics;
-    uint32_t& qInd_compute = info.queueFamilyIndex_compute;
-    uint32_t& qInd_present = info.queueFamilyIndex_presentation;
-    if (qInd_graphics != VK_QUEUE_FAMILY_IGNORED)
-        queueCreateInfos[queueCreateInfoCount++].queueFamilyIndex =
-            qInd_graphics;
-    if (qInd_present != VK_QUEUE_FAMILY_IGNORED &&
-        qInd_present != qInd_graphics)
-        queueCreateInfos[queueCreateInfoCount++].queueFamilyIndex =
-            qInd_present;
-    if (qInd_compute != VK_QUEUE_FAMILY_IGNORED &&
-        qInd_compute != qInd_graphics && qInd_compute != qInd_present)
-        queueCreateInfos[queueCreateInfoCount++].queueFamilyIndex =
-            qInd_compute;
-    VkPhysicalDeviceFeatures physicalDeviceFeatures;
-    vkGetPhysicalDeviceFeatures(info.phyDevice, &physicalDeviceFeatures);
+    uint32_t queue_create_info_count = 0;
+    uint32_t& queue_index_graphics = info.queueFamilyIndex_graphics;
+    uint32_t& queue_index_compute = info.queueFamilyIndex_compute;
+    uint32_t& queue_index_present = info.queueFamilyIndex_presentation;
+    if (queue_index_graphics != VK_QUEUE_FAMILY_IGNORED)
+        queue_create_infos[queue_create_info_count++].queueFamilyIndex =
+            queue_index_graphics;
+    if (queue_index_present != VK_QUEUE_FAMILY_IGNORED &&
+        queue_index_present != queue_index_graphics)
+        queue_create_infos[queue_create_info_count++].queueFamilyIndex =
+            queue_index_present;
+    if (queue_index_compute != VK_QUEUE_FAMILY_IGNORED &&
+        queue_index_compute != queue_index_graphics &&
+        queue_index_compute != queue_index_present)
+        queue_create_infos[queue_create_info_count++].queueFamilyIndex =
+            queue_index_compute;
+    // 2.检查设备特性和扩展
+    //   设备属性:
+    if constexpr (API_VERSION >= VK_API_VERSION_1_1) {
+        info.phyDeviceProperties = {
+            VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2};
+        info.phyDeviceVulkan11Properties = {
+            VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_PROPERTIES};
+        info.phyDeviceVulkan12Properties = {
+            VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_PROPERTIES};
+        info.phyDeviceVulkan13Properties = {
+            VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_PROPERTIES};
+        if constexpr (API_VERSION >= VK_API_VERSION_1_2) {
+            info.phyDeviceProperties.pNext = &info.phyDeviceVulkan11Properties;
+            info.phyDeviceVulkan11Properties.pNext =
+                &info.phyDeviceVulkan12Properties;
+            if constexpr (API_VERSION >= VK_API_VERSION_1_3) {
+                info.phyDeviceVulkan12Properties.pNext =
+                    &info.phyDeviceVulkan13Properties;
+            }
+        }
+        vkGetPhysicalDeviceProperties2(info.phyDevice,
+                                       &info.phyDeviceProperties);
+        info.phyDeviceMemoryProperties = {
+            VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_PROPERTIES_2};
+        vkGetPhysicalDeviceMemoryProperties2(info.phyDevice,
+                                             &info.phyDeviceMemoryProperties);
+    } else {
+        vkGetPhysicalDeviceProperties(info.phyDevice,
+                                      &info.phyDeviceProperties.properties);
+        vkGetPhysicalDeviceMemoryProperties(
+            info.phyDevice, &info.phyDeviceMemoryProperties.memoryProperties);
+    }
+    _setDeviceCreateInfoPNexets(&info.phyDeviceProperties);
+    //   设备特性:
+    if constexpr (API_VERSION >= VK_API_VERSION_1_1) {
+        info.phyDeviceFeatures = {
+            VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2};
+        info.phyDeviceVulkan11Features = {
+            VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES};
+        info.phyDeviceVulkan12Features = {
+            VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES};
+        info.phyDeviceVulkan13Features = {
+            VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES};
+        if constexpr (API_VERSION >= VK_API_VERSION_1_2) {
+            info.phyDeviceFeatures.pNext =
+                &info.phyDeviceVulkan11Features;
+            info.phyDeviceVulkan11Features.pNext =
+                &info.phyDeviceVulkan12Features;
+            if constexpr (API_VERSION >= VK_API_VERSION_1_3)
+                info.phyDeviceVulkan12Features.pNext =
+                    &info.phyDeviceVulkan13Features;
+        }
+        vkGetPhysicalDeviceFeatures2(info.phyDevice,
+                                     &info.phyDeviceFeatures);
+    } else
+        vkGetPhysicalDeviceFeatures(info.phyDevice,
+                                    &info.phyDeviceFeatures.features);
+    //   设备扩展:
     std::vector<VkExtensionProperties> supported_ext = _getDeviceExtensions();
     std::vector<const char*> deviceExtensions =
         _selectDeviceExtensions(supported_ext);
     *out_flag = _getVMAflags(deviceExtensions);
+    // 3.创建逻辑设备
     VkDeviceCreateInfo deviceCreateInfo = {
         .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
         .flags = 0,
-        .queueCreateInfoCount = queueCreateInfoCount,
-        .pQueueCreateInfos = queueCreateInfos,
+        .queueCreateInfoCount = queue_create_info_count,
+        .pQueueCreateInfos = queue_create_infos,
         .enabledExtensionCount = uint32_t(deviceExtensions.size()),
-        .ppEnabledExtensionNames = deviceExtensions.data(),
-        .pEnabledFeatures = &physicalDeviceFeatures};
+        .ppEnabledExtensionNames = deviceExtensions.data()};
+    deviceCreateInfo.pNext = &info.phyDeviceFeatures;
+    // deviceCreateInfo.pEnabledFeatures = info.phyDeviceFeatures;
     if (VkResult result = vkCreateDevice(info.phyDevice, &deviceCreateInfo,
                                          nullptr, &info.device)) {
         print_error("InitVulkan",
@@ -397,39 +457,44 @@ VkResult _createDevice(VmaAllocatorCreateFlags* out_flag) {
                     int32_t(result));
         return result;
     }
-    if (qInd_graphics != VK_QUEUE_FAMILY_IGNORED)
-        vkGetDeviceQueue(info.device, qInd_graphics, 0, &info.queue_graphics);
-    if (qInd_present != VK_QUEUE_FAMILY_IGNORED)
-        vkGetDeviceQueue(info.device, qInd_present, 0,
+    // 4.获取队列
+    if (queue_index_graphics != VK_QUEUE_FAMILY_IGNORED)
+        vkGetDeviceQueue(info.device, queue_index_graphics, 0,
+                         &info.queue_graphics);
+    if (queue_index_present != VK_QUEUE_FAMILY_IGNORED)
+        vkGetDeviceQueue(info.device, queue_index_present, 0,
                          &info.queue_presentation);
-    if (qInd_compute != VK_QUEUE_FAMILY_IGNORED)
-        vkGetDeviceQueue(info.device, qInd_compute, 0, &info.queue_compute);
-    vkGetPhysicalDeviceProperties(info.phyDevice, &info.phyDeviceProperties);
-    vkGetPhysicalDeviceMemoryProperties(info.phyDevice,
-                                        &info.phyDeviceMemoryProperties);
-    print_log("Init", "Renderer:", info.phyDeviceProperties.deviceName);
+    if (queue_index_compute != VK_QUEUE_FAMILY_IGNORED)
+        vkGetDeviceQueue(info.device, queue_index_compute, 0,
+                         &info.queue_compute);
+    print_log("Init",
+              "Renderer:", info.phyDeviceProperties.properties.deviceName);
     return VK_SUCCESS;
+}
+void _setDeviceCreateInfoPNexets(VkPhysicalDeviceProperties2* prooerties) {
+    // do something
+    // 此函数暂时用不到编写,除非需要使用设备的其他特性,如光线追踪,注意:传入指针的pNext可能含有其他结构体,并且,注意对象生存期
 }
 VkResult _getSurfaceFormats(std::vector<VkSurfaceFormatKHR>& formats) {
     auto& info = context.vulkanInfo;
-    uint32_t surfaceFormatCount;
+    uint32_t format_count;
     if (VkResult result = vkGetPhysicalDeviceSurfaceFormatsKHR(
-            info.phyDevice, info.surface, &surfaceFormatCount, nullptr)) {
+            info.phyDevice, info.surface, &format_count, nullptr)) {
         print_error("getSurfaceFormats",
                     "Failed to get the count of surface "
                     "formats! Error code:",
                     int32_t(result));
         return result;
     }
-    if (!surfaceFormatCount) {
+    if (!format_count) {
         print_error("getSurfaceFormats",
                     "Failed to find any supported surface "
                     "format!");
         abort();
     }
-    formats.resize(surfaceFormatCount);
+    formats.resize(format_count);
     VkResult result = vkGetPhysicalDeviceSurfaceFormatsKHR(
-        info.phyDevice, info.surface, &surfaceFormatCount, formats.data());
+        info.phyDevice, info.surface, &format_count, formats.data());
     if (result)
         print_error("getSurfaceFormats",
                     "Failed to get surface formats! Error "
@@ -440,9 +505,9 @@ VkResult _getSurfaceFormats(std::vector<VkSurfaceFormatKHR>& formats) {
 VkResult _createSwapchain(bool limitFrameRate,
                           VkSwapchainCreateFlagsKHR flags) {
     auto& info = context.vulkanInfo;
-    VkSurfaceCapabilitiesKHR surfaceCapabilities = {};
+    VkSurfaceCapabilitiesKHR surface_capabilities = {};
     if (VkResult result = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(
-            info.phyDevice, info.surface, &surfaceCapabilities)) {
+            info.phyDevice, info.surface, &surface_capabilities)) {
         print_error(
             "createSwapchain",
             "Failed to get physical device surface capabilities!Error code:",
@@ -450,35 +515,35 @@ VkResult _createSwapchain(bool limitFrameRate,
         return result;
     }
     auto& createInfo = info.swapchainCreateInfo;
-    createInfo.minImageCount =
-        surfaceCapabilities.minImageCount +
-        (surfaceCapabilities.maxImageCount > surfaceCapabilities.minImageCount);
+    createInfo.minImageCount = surface_capabilities.minImageCount +
+                               (surface_capabilities.maxImageCount >
+                                surface_capabilities.minImageCount);
     createInfo.imageExtent =
-        surfaceCapabilities.currentExtent.width == (~0u)
+        surface_capabilities.currentExtent.width == (~0u)
             ? VkExtent2D{std::clamp(context.windowInfo.width,
-                                    surfaceCapabilities.minImageExtent.width,
-                                    surfaceCapabilities.maxImageExtent.width),
+                                    surface_capabilities.minImageExtent.width,
+                                    surface_capabilities.maxImageExtent.width),
                          std::clamp(context.windowInfo.height,
-                                    surfaceCapabilities.minImageExtent.height,
-                                    surfaceCapabilities.maxImageExtent.height)}
-            : surfaceCapabilities.currentExtent;
+                                    surface_capabilities.minImageExtent.height,
+                                    surface_capabilities.maxImageExtent.height)}
+            : surface_capabilities.currentExtent;
     createInfo.imageArrayLayers = 1;
-    createInfo.preTransform = surfaceCapabilities.currentTransform;
-    if (surfaceCapabilities.supportedCompositeAlpha &
+    createInfo.preTransform = surface_capabilities.currentTransform;
+    if (surface_capabilities.supportedCompositeAlpha &
         VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR)
         createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR;
     else
         for (size_t i = 0; i < 4; i++)
-            if (surfaceCapabilities.supportedCompositeAlpha & 1 << i) {
+            if (surface_capabilities.supportedCompositeAlpha & 1 << i) {
                 createInfo.compositeAlpha = VkCompositeAlphaFlagBitsKHR(
-                    surfaceCapabilities.supportedCompositeAlpha & 1 << i);
+                    surface_capabilities.supportedCompositeAlpha & 1 << i);
                 break;
             }
     createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-    if (surfaceCapabilities.supportedUsageFlags &
+    if (surface_capabilities.supportedUsageFlags &
         VK_IMAGE_USAGE_TRANSFER_SRC_BIT)
         createInfo.imageUsage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
-    if (surfaceCapabilities.supportedUsageFlags &
+    if (surface_capabilities.supportedUsageFlags &
         VK_IMAGE_USAGE_TRANSFER_DST_BIT)
         createInfo.imageUsage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
     else
@@ -633,9 +698,9 @@ VkResult _setSurfaceFormat(
 VkResult recreateSwapchain() {
     auto& info = context.vulkanInfo;
     auto& createInfo = info.swapchainCreateInfo;
-    VkSurfaceCapabilitiesKHR surfaceCapabilities = {};
+    VkSurfaceCapabilitiesKHR surface_capabilities = {};
     VkResult result = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(
-        info.phyDevice, info.surface, &surfaceCapabilities);
+        info.phyDevice, info.surface, &surface_capabilities);
     if (result != VK_SUCCESS) {
         print_error(
             "recreateSwapchain",
@@ -643,10 +708,10 @@ VkResult recreateSwapchain() {
             int32_t(result));
         return result;
     }
-    if (surfaceCapabilities.currentExtent.width == 0 ||
-        surfaceCapabilities.currentExtent.height == 0)
+    if (surface_capabilities.currentExtent.width == 0 ||
+        surface_capabilities.currentExtent.height == 0)
         return VK_SUBOPTIMAL_KHR;
-    createInfo.imageExtent = surfaceCapabilities.currentExtent;
+    createInfo.imageExtent = surface_capabilities.currentExtent;
     createInfo.oldSwapchain = info.swapchain;
     result = vkQueueWaitIdle(info.queue_graphics);
     // 仅在等待图形队列成功，且图形与呈现所用队列不同时等待呈现队列
@@ -747,7 +812,7 @@ VkResult _initVMA(VmaAllocatorCreateFlags flag) {
     auto& info = context.vulkanInfo;
     VmaAllocatorCreateInfo create_info = {};
     create_info.flags = flag;
-    create_info.vulkanApiVersion = VK_API_VERSION_1_3;
+    create_info.vulkanApiVersion = API_VERSION;
     create_info.instance = info.instance;
     create_info.device = info.device;
     create_info.physicalDevice = info.phyDevice;

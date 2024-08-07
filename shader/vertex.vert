@@ -11,6 +11,7 @@ layout(binding = 0, set=0) uniform uniformData {
     vec4 cameraPos;
     mat4 cameraMat;
     mat4 model;
+    mat3 transNormal;
 };
 
 layout(location = 0) in vec3 inPosition;
@@ -22,6 +23,6 @@ layout(location = 2) out vec4 outFragPos;
 void main() {
     outFragPos = model*vec4(inPosition,1);
     outColor = ambientStrength*lightColor.xyz*objectColor.xyz;
-    outNormal = inNormal;
+    outNormal = transNormal * inNormal;
     gl_Position = cameraMat * outFragPos;
 }

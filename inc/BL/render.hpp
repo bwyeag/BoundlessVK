@@ -36,8 +36,6 @@ bool initVulkanRenderer();
 void terminateVulkanRenderer();
 VkResult _createRenderContext();
 void _destroyRenderContext();
-void _createRenderLoop();
-void _destroyRenderLoop();
 void render(RenderDataPackBase& packet);
 VkResult submit_cmdBuffer_graphics_wait(VkCommandBuffer commandBuffer);
 VkResult submit_cmdBuffer_graphics(VkCommandBuffer commandBuffer,

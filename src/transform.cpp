@@ -104,8 +104,8 @@ mat4f look_at(const vec3f& eye, const vec3f& center, const vec3f& up) {
     return look_forward(eye, center-eye,up);
 }
 mat4f look_forward(const vec3f& eye, const vec3f& forward, const vec3f& up) {
-    vec3f f = forward.normalized();
-    vec3f s = (f.cross(up)).normalized();
+    vec3f f = forward;
+    vec3f s = f.cross(up);
     vec3f u = s.cross(f);
 
     return _look_matrix(eye,f,s,u);
