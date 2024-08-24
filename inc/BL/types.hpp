@@ -211,7 +211,7 @@ class CommandPool {
     void free_buffers(CommandBuffer* pBuffers, uint32_t count) const {
         vkFreeCommandBuffers(context.vulkanInfo.device, handle, count,
                              (VkCommandBuffer*)pBuffers);
-        std::memset(pBuffers, 0, sizeof(VkCommandBuffer) * count);
+        std::memset((void*)pBuffers, 0, sizeof(VkCommandBuffer) * count);
     }
     VkResult create(VkCommandPoolCreateInfo& createInfo) {
         createInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;

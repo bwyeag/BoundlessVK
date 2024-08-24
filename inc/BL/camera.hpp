@@ -2,55 +2,144 @@
 #define _BOUNDLESS_CAMERA_CXX_FILE_
 #include "transform.hpp"
 namespace BL {
-enum CameraMovement { FORWARD, BACKWARD, LEFT, RIGHT };
-struct Camera_debug {
+enum CameraMovement {
+    NONE_MOVEMENT = 0x0,
+    FORWARD = 0x1,
+    BACKWARD = 0x2,
+    LEFT = 0x4,
+    RIGHT = 0x8,
+    ROTATE_LEFT = 0x10,
+    ROTATE_RIGHT = 0x20,
+    FORWARD_UP = 0x40,
+    FORWARD_DOWN = 0x80,
+    FORWARD_LEFT = 0x100,
+    FORWARD_RIGHT = 0x200,
+    LOCK = 0x400,
+    ZOOM_UP = 0x800,
+    ZOOM_DOWN = 0x1000,
+    MOVEMENT = 0x3FF,
+    VIEW = 0x1800
+};
+enum CameraProjType { FRUSTUM = 1, ORTHO = 0 };
+class Camera_debug {
     CameraTransform transform;
-    vec3f worldUp;
-    vec3f worldForward;
-    vec3f worldRight;
-    float yaw;
-    float pitch;
-    float moveSpeed;
+    float moveVelocity;
+    float zoomMax, zoomMin;
     float mouseSensitivity;
-
-    vec3f& position() { return transform.position; }
-    vec3f& forward() { return transform.forward; }
-    vec3f& up() { return transform.up; }
-    vec3f& right() { return transform.right; }
-    float& fov() { return transform.fov; }
+    float keySensitivity;
+    float zoomSensitivity;
+    bool _isLocked = true; /*摄像机是否上锁，为true时无法移动等等*/
+   public:
+    vec3f& Position() { return transform.position; }
+    vec3f& Forward() { return transform.forward; }
+    vec3f& Up() { return transform.up; }
+    vec3f& Right() { return transform.right; }
+    float& NearDist() { return transform.zNear; }
+    float& FarDist() { return transform.zFar; }
+    float& Fov() { return transform.fov; }
+    void set_zoom_range(float m, float M) { zoomMin = m, zoomMax = M; }
+    void set_move_velocity(float v) { moveVelocity = v; }
+    void set_mouse_sensitivity(float v) { mouseSensitivity = v; }
+    void set_key_sensitivity(float v) { keySensitivity = v; }
+    void set_zoom_sensitivity(float v) { zoomSensitivity = v; }
+    void set_proj_type(CameraProjType t) { transform.isFrustum = bool(t); }
+    bool isLocked() const { return _isLocked; }
     void process_keyboard(CameraMovement direction, float deltaTime) {
-        transform.isViewEdited = true;
-        float velocity = moveSpeed * deltaTime;
-        transform.normalize_vecs();
-        if (direction == FORWARD)
-            this->position() += this->forward() * velocity;
-        if (direction == BACKWARD)
-            this->position() -= this->forward() * velocity;
-        if (direction == LEFT)
-            this->position() -= this->right() * velocity;
-        if (direction == RIGHT)
-            this->position() += this->right() * velocity;
+        if (direction & LOCK) {
+            if (_isLocked) {
+                _isLocked = false;
+                glfwSetInputMode(context.windowInfo.pWindow, GLFW_CURSOR,
+                                 GLFW_CURSOR_DISABLED);
+                print_log("Camera Debug", "Camera Unlocked!");
+            } else {
+                _isLocked = true;
+                glfwSetInputMode(context.windowInfo.pWindow, GLFW_CURSOR,
+                                 GLFW_CURSOR_NORMAL);
+                print_log("Camera Debug", "Camera Locked!");
+            }
+            return;
+        }
+        if (!_isLocked) {
+            if (direction & MOVEMENT) {
+                using angle_axisf = Eigen::AngleAxisf;
+                transform.isViewEdited = true;
+                float velocity = moveVelocity * deltaTime;
+                transform.normalize_vecs();
+                if (direction & FORWARD)
+                    this->Position() += this->Forward() * velocity;
+                if (direction & BACKWARD)
+                    this->Position() -= this->Forward() * velocity;
+                if (direction & LEFT)
+                    this->Position() -= this->Right() * velocity;
+                if (direction & RIGHT)
+                    this->Position() += this->Right() * velocity;
+                float delta_angle = keySensitivity * deltaTime;
+                bool transFlag = false;
+                quatf rotation = quatf::Identity();
+                if (direction & ROTATE_LEFT) {
+                    angle_axisf rot(-delta_angle, Forward());
+                    rotation = rot * rotation;
+                    transFlag = true;
+                }
+                if (direction & ROTATE_RIGHT) {
+                    angle_axisf rot(delta_angle, Forward());
+                    rotation = rot * rotation;
+                    transFlag = true;
+                }
+                if (direction & FORWARD_UP) {
+                    angle_axisf rot(delta_angle, Right());
+                    rotation = rot * rotation;
+                    transFlag = true;
+                }
+                if (direction & FORWARD_DOWN) {
+                    angle_axisf rot(-delta_angle, Right());
+                    rotation = rot * rotation;
+                    transFlag = true;
+                }
+                if (direction & FORWARD_LEFT) {
+                    angle_axisf rot(delta_angle, Up());
+                    rotation = rot * rotation;
+                    transFlag = true;
+                }
+                if (direction & FORWARD_RIGHT) {
+                    angle_axisf rot(-delta_angle, Up());
+                    rotation = rot * rotation;
+                    transFlag = true;
+                }
+                if (transFlag) {
+                    Forward() = rotation * Forward();
+                    Up() = rotation * Up();
+                    Right() = Forward().cross(Up());
+                }
+            }
+            if (direction & VIEW) {
+                transform.isProjEdited = true;
+                if (direction & ZOOM_UP)
+                    this->Fov() -= keySensitivity * deltaTime;
+                if (direction & ZOOM_DOWN)
+                    this->Fov() += keySensitivity * deltaTime;
+                this->Fov() = std::clamp(this->Fov(), zoomMin, zoomMax);
+            }
+        }
     }
     void process_mouse_movement(float xoffset, float yoffset) {
-        xoffset *= mouseSensitivity;
-        yoffset *= mouseSensitivity;
-        yaw += xoffset;
-        pitch += yoffset;
-        pitch = std::clamp(pitch, -89.8f, 89.8f);
-
-        transform.isViewEdited = true;
-        vec3f front = std::cos(radians(yaw)) * std::cos(radians(pitch)) * worldForward;
-        front += std::sin(radians(yaw)) * std::cos(radians(pitch)) * worldRight;
-        front += std::sin(radians(pitch)) * worldUp;
-        front.normalize();
-        this->forward() = front;
-        this->right() = front.cross(worldUp);
-        this->up() = this->right().cross(front);
+        if (!_isLocked) {
+            using angle_axisf = Eigen::AngleAxisf;
+            transform.isViewEdited = true;
+            angle_axisf rotYaw(-xoffset * mouseSensitivity, Up());
+            angle_axisf rotPitch(yoffset * mouseSensitivity, Right());
+            quatf rotation =  rotPitch*rotYaw;
+            Forward() = rotation * Forward();
+            Up() = rotation * Up();
+            Right() = Forward().cross(Up());
+        }
     }
     void process_mouse_scroll(float yoffset) {
-        transform.isProjEdited = true;
-        this->fov() -= yoffset * 0.2;
-        this->fov() = std::clamp(this->fov(), 0.0f, float(MATH_PI / 2.0f));
+        if (!_isLocked) {
+            transform.isProjEdited = true;
+            this->Fov() -= zoomSensitivity * yoffset;
+            this->Fov() = std::clamp(this->Fov(), zoomMin, zoomMax);
+        }
     }
     const mat4f& get_view_matrix(bool& changed) {
         return transform.get_view_matrix(changed);
