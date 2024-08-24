@@ -1,6 +1,7 @@
 #include <BL/init.hpp>
 #include <BL/mesh.hpp>
 #include <BL/render.hpp>
+#include <BL/camera.hpp>
 #define BL_PBR_SIMPLE_MAX_LIGHT_NUM 4
 #define BL_PBR_SIMPLE_MAX_INSTANCE_NUM 100
 #include <BL/render_types.hpp>
@@ -8,26 +9,21 @@
 #include <iostream>
 
 using namespace BL;
-constexpr double MATH_PI = 3.1415926535;
-CameraTransform camera;
+Camera_debug camera;
 float deltaTime = 0.1f;
 float lastTime = 0.0f;
-void processInput(GLFWwindow* window) {
-    static float V = 4.0f;
+void process_input(GLFWwindow* window) {
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
         glfwSetWindowShouldClose(window, true);
 
     if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
-        camera.position += camera.forward * (deltaTime * V),
-            camera.isViewEdited = true;
+        camera.process_keyboard(FORWARD, deltaTime);
     if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
-        camera.position += camera.forward * (-deltaTime * V),
-            camera.isViewEdited = true;
-    vec3f s = camera.forward.cross(camera.up).normalized();
+        camera.process_keyboard(BACKWARD, deltaTime);
     if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
-        camera.position += s * (-deltaTime * V), camera.isViewEdited = true;
+        camera.process_keyboard(LEFT, deltaTime);
     if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
-        camera.position += s * (deltaTime * V), camera.isViewEdited = true;
+        camera.process_keyboard(RIGHT, deltaTime);
 }
 void mouse_callback(GLFWwindow* window, double xposIn, double yposIn) {
     static bool firstMouse = true;
@@ -43,21 +39,13 @@ void mouse_callback(GLFWwindow* window, double xposIn, double yposIn) {
     }
 
     float xoffset = xpos - lastX;
-    float yoffset =
-        lastY - ypos;  // reversed since y-coordinates go from bottom to top
+    float yoffset = lastY - ypos;
 
-    lastX = xpos;
-    lastY = ypos;
-
-    xoffset *= 0.01;
-    yoffset *= 0.01;
-
-    camera.isViewEdited = true;
-    vec3f s = camera.forward.cross(camera.up).normalized();
-    camera.forward += s * xoffset + camera.up * yoffset;
-    camera.up += s * yoffset;
+    camera.process_mouse_movement(xoffset, yoffset);
 }
-
+void scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {
+    camera.process_mouse_scroll(static_cast<float>(yoffset));
+}
 int main() {
     setWindowInit(800, 600, true);
     if (!initWindow("Boundless", false, true) || !initVulkan()) {
@@ -66,10 +54,9 @@ int main() {
     glfwSetCursorPosCallback(context.windowInfo.pWindow, mouse_callback);
     glfwSetInputMode(context.windowInfo.pWindow, GLFW_CURSOR,
                      GLFW_CURSOR_DISABLED);
-
+    glfwSetScrollCallback(context.windowInfo.pWindow, scroll_callback);
     initVulkanRenderer();
     initDepthAttachment();
-    double t0 = glfwGetTime();
     {
         Uniform_LightUniform uniform_light_uniform;
         uniform_light_uniform.lightCount = 4;
@@ -93,9 +80,6 @@ int main() {
             for (int j = 0; j < 10; j++) {
                 modelTrans.isEdited = true;
                 modelTrans.position = vec3f(0, 5.0f * j, 5.0f * i);
-                std::cout << modelTrans.position.x() << '\t'
-                          << modelTrans.position.y() << '\t'
-                          << modelTrans.position.z() << '\n';
                 uniform_sence_uniform.instance[i * 10 + j] = {
                     .matrixModel = modelTrans.get_matrix(),
                     .albedo = vec3f(0.8f, 0.0f, 0.0f),
@@ -110,19 +94,26 @@ int main() {
                         .transpose();
             }
         }
-        camera.isProjEdited = true;
-        camera.zFar = 100.0f;
-        camera.zNear = 0.2f;
-        camera.forward = vec3f(-1.0f, 0.0f, 0.0f);
-        camera.position = vec3f(10.0f, 0.0f, 0.0f);
-        camera.up = vec3f(0.0f, 0.0f, 1.0f);
-        camera.up = camera.up.cross(camera.forward);
-        camera.up = camera.forward.cross(camera.up);
-        camera.fov = MATH_PI / 2;
-        camera.isFrustum = true;
-        bool changedFlag = false;
-        uniform_sence_uniform.cameraPosition = vec3f(
-            camera.position.x(), camera.position.y(), camera.position.z());
+        camera.worldUp = vec3f(0.0f,0.0f,1.0f);
+        camera.worldForward = vec3f(0.0f,1.0f,0.0f);
+        camera.worldRight = vec3f(1.0f,0.0f,0.0f);
+        camera.yaw = 0.0f;
+        camera.pitch = 0.0f;
+        camera.mouseSensitivity = 0.004f;
+        camera.moveSpeed = 3.0f;
+        camera.transform.isViewEdited = true;
+        camera.position() = vec3f(0.0f,0.0f,0.0f);
+        camera.forward() = vec3f(1.0f,0.0f,0.0f);
+        camera.up() = vec3f(0.0f,0.0f,1.0f);
+        camera.transform.isProjEdited = true;
+        camera.transform.isFrustum = true;
+        camera.transform.zNear = 0.1f;
+        camera.transform.zFar = 50.0f;
+        camera.fov() = radians(45.0f);
+        bool changedFlag;
+        uniform_sence_uniform.cameraPosition =
+            vec3f(camera.position().x(), camera.position().y(),
+                  camera.position().z());
         uniform_sence_uniform.matrixCamera =
             camera.get_proj_matrix(changedFlag) *
             camera.get_view_matrix(changedFlag);
@@ -163,8 +154,6 @@ int main() {
         renderPipeline.create(&shader, &renderpass_pack, &mesh);
 
         while (!checkWindowClose()) {
-            std::cout << '\r' << camera.position.x() << '\t'
-                      << camera.position.y();
             float currentTime = static_cast<float>(glfwGetTime());
             deltaTime = currentTime - lastTime;
             lastTime = currentTime;
@@ -172,11 +161,11 @@ int main() {
                 glfwGetWindowAttrib(context.windowInfo.pWindow, GLFW_ICONIFIED))
                 glfwWaitEvents();
 
-            double t2 = glfwGetTime();
-            uniform_sence_uniform.cameraPosition = camera.position;
+            uniform_sence_uniform.cameraPosition = camera.position();
             uniform_sence_uniform.matrixCamera =
                 camera.get_proj_matrix(changedFlag) *
                 camera.get_view_matrix(changedFlag);
+            std::cout << camera.yaw << ',' << camera.pitch << '\n';
             if (changedFlag) {
                 renderPipeline.uniformBuf_SenceData.transfer_data(
                     &uniform_sence_uniform);
@@ -184,10 +173,9 @@ int main() {
             }
             render(renderPack);
             glfwPollEvents();
-            processInput(context.windowInfo.pWindow);
+            process_input(context.windowInfo.pWindow);
             calcFps();
         }
-        std::cout << '\r';
         waitAll();
     }
     destroyDepthAttachment();

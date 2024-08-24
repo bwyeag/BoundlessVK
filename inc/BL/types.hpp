@@ -800,6 +800,14 @@ class UniformBuffer : protected Buffer {
         }
         this->flush_data();
     }
+    void transfer_data(const void* pData, uint32_t size, uint32_t offset) {
+        uint32_t d;
+        for (uint32_t i = 0; i < MAX_FLIGHT_NUM; i++) {
+            d = i * blockOffset + offset;
+            memcpy((uint8_t*)pBufferData + d, pData, size);
+            this->flush_data(d,size);
+        }
+    }
     void* get_pdata() { return pBufferData; }
     VkDeviceSize get_alignment() { return blockOffset; }
     VkDeviceSize get_block_size() { return blockSize; }

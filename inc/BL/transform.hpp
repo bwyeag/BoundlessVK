@@ -1,12 +1,17 @@
 #ifndef _BOUNDLESS_TRANSFORM_CXX_FILE_
 #define _BOUNDLESS_TRANSFORM_CXX_FILE_
 #include <cmath>
-#include "math_types.hpp"
 #include "init.hpp"
+#include "math_types.hpp"
 /*
  * 使用右手坐标系，NDC：x:[-1,+1],y:[-1,+1],z:[0,+1]
  */
 namespace BL {
+constexpr double MATH_PI = 3.1415926535897932384626;
+template <std::floating_point T>
+T radians(T angle) {
+    return angle * static_cast<T>((2.0 * MATH_PI) / 360.0);
+}
 // 此部分代码由GLM库改写而来
 mat4f frustum(float left,
               float right,
@@ -27,6 +32,10 @@ mat4f perspective(float fov,
                   float zNear,
                   float zFar);
 mat4f infinite_perspective(float fov, float aspect, float zNear);
+mat4f look_matrix(const vec3f& eye,
+                  const vec3f& f,
+                  const vec3f& s,
+                  const vec3f& u);
 mat4f look_at(const vec3f& eye, const vec3f& center, const vec3f& up);
 mat4f look_forward(const vec3f& eye, const vec3f& forward, const vec3f& up);
 quatf rotate(const vec3f eulerAngle) /*欧拉角转四元数*/;
@@ -66,9 +75,10 @@ struct CameraTransform {
     mutable mat4f viewMatrix;
     mutable mat4f projMatrix;
 
-    vec3f position;          // 位置
-    mutable vec3f forward;  // 前向量（右手系）
-    mutable vec3f up;  // 上向量
+    vec3f position;         // 位置
+    mutable vec3f forward;  // 前向量（右手系）= z
+    mutable vec3f up;       // 上向量 = y
+    mutable vec3f right;    // 右向量 = x
 
     float zNear, zFar, fov;
     mutable float aspect = 0.0f;
@@ -76,14 +86,21 @@ struct CameraTransform {
     bool isFrustum;
     mutable bool isViewEdited = true;
     mutable bool isProjEdited = true;
-
-    const mat4f& get_view_matrix(bool& changed) const {
+    void normalize_vecs() const {
         if (isViewEdited) {
             forward.normalize();
-            up.normalize();
-            viewMatrix = look_forward(position, forward, up);
+            right = forward.cross(up).normalized();
+            up = right.cross(forward);
+        }
+    }
+    const mat4f& get_view_matrix(bool& changed) const {
+        if (isViewEdited) {
+            this->normalize_vecs();
+            viewMatrix = look_matrix(position, forward, right, up);
             isViewEdited = false;
-            changed = true;
+            changed |= true;
+        } else {
+            changed |= false;
         }
         return viewMatrix;
     }
@@ -101,7 +118,9 @@ struct CameraTransform {
                                    height / 2, zNear, zFar);
             }
             isProjEdited = false;
-            changed = true;
+            changed |= true;
+        } else {
+            changed |= false;
         }
         return projMatrix;
     }

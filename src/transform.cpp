@@ -77,7 +77,7 @@ mat4f infinite_perspective(float fov, float aspect, float zNear) {
     res(2, 3) = static_cast<float>(-2) * zNear;
     return res;
 }
-static mat4f _look_matrix(const vec3f& eye,
+mat4f look_matrix(const vec3f& eye,
                           const vec3f& f,
                           const vec3f& s,
                           const vec3f& u) {
@@ -108,7 +108,7 @@ mat4f look_forward(const vec3f& eye, const vec3f& forward, const vec3f& up) {
     vec3f s = f.cross(up);
     vec3f u = s.cross(f);
 
-    return _look_matrix(eye,f,s,u);
+    return look_matrix(eye,f,s,u);
 }
 quatf rotate(const vec3f eulerAngle) /*欧拉角转四元数*/ {
     Eigen::AngleAxisf rollAngle(Eigen::AngleAxisf(eulerAngle.x(), vec3f::UnitX()));

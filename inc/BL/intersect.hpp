@@ -14,24 +14,25 @@ bool intersect_ray_sphere_res(const vec3f& o,
                               float r,
                               float* t);
 class OBB {
-    vec3f c, u, v, h;
+    vec3f _c, _u, _v, _h;
 
    public:
-    vec3f c() const { return c; }
-    vec3f u() const { return u; }
-    vec3f v() const { return v; }
-    vec3f w() const { return u.cross(v); }
-    float h_u() const { return h.x(); }
-    float h_v() const { return h.y(); }
-    float h_w() const { return h.z(); }
+    vec3f c() const { return _c; }
+    vec3f u() const { return _u; }
+    vec3f v() const { return _v; }
+    vec3f w() const { return _u.cross(_v); }
+    vec3f h() const { return _h; }
+    float h_u() const { return _h.x(); }
+    float h_v() const { return _h.y(); }
+    float h_w() const { return _h.z(); }
 
-    void set_c(const vec3f& new_c) { c = new_c; }
+    void set_c(const vec3f& new_c) { _c = new_c; }
     void set_size(const vec3f& x, const vec3f& y, float h_z) {
-        h.x() = x.norm();
-        u = x / h.x();
-        h.y() = y.norm();
-        v = y / h.y();
-        h.z() = h_z;
+        _h.x() = x.norm();
+        _u = x / _h.x();
+        _h.y() = y.norm();
+        _v = y / _h.y();
+        _h.z() = h_z;
     }
 };
 bool intersect_ray_OBB_res(const vec3f& o,
@@ -43,22 +44,22 @@ inline bool intersect_ray_OBB(const vec3f& o, const vec3f& d, const OBB& A) {
     return intersect_ray_OBB_res(o, d, A, &t);
 }
 class AABB {
-    vec3f c, s;
+    vec3f _c, _s;
 
    public:
-    vec3f c() const { return c; }
+    vec3f c() const { return _c; }
     vec3f u() const { return vec3f::UnitX(); }
     vec3f v() const { return vec3f::UnitY(); }
     vec3f w() const { return vec3f::UnitZ(); }
-    vec3f h() const { return s; }
-    float h_u() const { return s.x(); }
-    float h_v() const { return s.y(); }
-    float h_w() const { return s.z(); }
-    vec3f max() const { return c + s; }
-    vec3f min() const { return c - s; }
+    vec3f h() const { return _s; }
+    float h_u() const { return _s.x(); }
+    float h_v() const { return _s.y(); }
+    float h_w() const { return _s.z(); }
+    vec3f max() const { return _c + _s; }
+    vec3f min() const { return _c - _s; }
 
-    void set_c(const vec3f& new_c) { c = new_c; }
-    void set_size(const vec3f& new_s) { s = new_s; }
+    void set_c(const vec3f& new_c) { _c = new_c; }
+    void set_size(const vec3f& new_s) { _s = new_s; }
 };
 bool intersect_ray_AABB_res(const vec3f& o,
                             const vec3f& d,
@@ -95,14 +96,15 @@ struct Plane {
     }
 };
 enum FrustumPlaneIndex { left = 0, right, top, bottom, near, far };
-void spawn_frustum_plane(std::array<Plane, 6>& planes, const mat4& vp_mat);
+void spawn_frustum_plane(std::array<Plane, 6>& planes, const mat4f& vp_mat);
 inline int intersect_plane_AABB(const Plane& p, const AABB& A) {
     return intersect_plane_AABB(p.n, p.d, A);
 }
 inline int intersect_plane_OBB(const Plane& p, const OBB& A) {
-    return intersect_plane_OBB(p.n, p.d.A);
+    return intersect_plane_OBB(p.n, p.d, A);
 }
-bool intersect_frustum_planes_AABB(const std::array<Plane, 6>& ps, const AABB& A);
+bool intersect_frustum_planes_AABB(const std::array<Plane, 6>& ps,
+                                   const AABB& A);
 bool intersect_frustum_planes_OBB(const std::array<Plane, 6>& ps, const OBB& A);
 }  // namespace BL
 #endif  //!_BOUNDLESS_INTERSECT_CXX_FILE_

@@ -155,8 +155,7 @@ bool intersect_ray_AABB_res(const vec3f& o,
     return true;
 }
 int intersect_plane_AABB(const vec3f& n, float d, const AABB& A) {
-    vec3f amin = A.min(), amax = A.max(),  // 获取A的对角位置
-        n_abs = n.array().abs();
+    vec3f n_abs = n.array().abs();
     float e = A.h().dot(n_abs);
     float s = A.c().dot(n) + d;
     if (s - e > 0.0f)
@@ -166,7 +165,6 @@ int intersect_plane_AABB(const vec3f& n, float d, const AABB& A) {
     return 0;
 }
 int intersect_plane_OBB(const vec3f& n, float d, const OBB& A) {
-    vec3f amin = A.min(), amax = A.max();
     vec3f n_abs;
     n_abs.x() = A.u().dot(n);
     n_abs.y() = A.v().dot(n);
@@ -203,7 +201,7 @@ bool intersect_AABB(const AABB& A, const AABB& B) {
         return false;
     return true;
 }
-void spawn_frustum_plane(std::array<Plane,6>& planes, const mat4& vp_mat) {
+void spawn_frustum_plane(std::array<Plane, 6>& planes, const mat4f& vp_mat) {
     planes[left] = {{vp_mat(0, 3) + vp_mat(0, 0), vp_mat(1, 3) + vp_mat(1, 0),
                      vp_mat(2, 3) + vp_mat(2, 0)},
                     vp_mat(3, 3) + vp_mat(3, 0)};
@@ -224,7 +222,8 @@ void spawn_frustum_plane(std::array<Plane,6>& planes, const mat4& vp_mat) {
         planes[i].norm();
     }
 }
-bool intersect_frustum_planes_AABB(const std::array<Plane, 6>& ps, const AABB& A) {
+bool intersect_frustum_planes_AABB(const std::array<Plane, 6>& ps,
+                                   const AABB& A) {
     // 法线朝向视锥体外部
     for (uint32_t i = 0; i < 6; i++) {
         if (intersect_plane_AABB(ps[i], A) <
@@ -233,7 +232,8 @@ bool intersect_frustum_planes_AABB(const std::array<Plane, 6>& ps, const AABB& A
     }
     return true;
 }
-bool intersect_frustum_planes_OBB(const std::array<Plane, 6>& ps, const OBB& A) {
+bool intersect_frustum_planes_OBB(const std::array<Plane, 6>& ps,
+                                  const OBB& A) {
     // 法线朝向视锥体外部
     for (uint32_t i = 0; i < 6; i++) {
         if (intersect_plane_OBB(ps[i], A) <

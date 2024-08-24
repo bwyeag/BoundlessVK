@@ -7,7 +7,6 @@ bool initVulkanRenderer() {
     VkResult result = _createRenderContext();
     if (result)
         return false;
-    _createRenderLoop();
     return true;
 }
 void terminateVulkanRenderer() {
