@@ -343,7 +343,7 @@ void RenderPassPack_PBR_3d_simple::create() {
          .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
          .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
          .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-         .finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR},
+         .finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL},
         {// 深度模板附件
          .format = render_context.depthFormat,
          .samples = VK_SAMPLE_COUNT_1_BIT,

@@ -77,12 +77,12 @@ class Camera_debug {
                 bool transFlag = false;
                 quatf rotation = quatf::Identity();
                 if (direction & ROTATE_LEFT) {
-                    angle_axisf rot(-delta_angle, Forward());
+                    angle_axisf rot(delta_angle, Forward());
                     rotation = rot * rotation;
                     transFlag = true;
                 }
                 if (direction & ROTATE_RIGHT) {
-                    angle_axisf rot(delta_angle, Forward());
+                    angle_axisf rot(-delta_angle, Forward());
                     rotation = rot * rotation;
                     transFlag = true;
                 }

@@ -7,14 +7,28 @@
 #include "types_plus.hpp"
 #include "vertex.hpp"
 
+#define BOUNDLESS_USE_UI_RENDER
 #include <Eigen/Core>
 namespace BL {
+#ifdef BOUNDLESS_FORCE_OWNERSHIP_TRANSFER
 const bool FORCE_OWNERSHIP_TRANSFER = true;
+#else
+const bool FORCE_OWNERSHIP_TRANSFER = false;
+#endif // BOUNDLESS_FORCE_OWNERSHIP_TRANSFER
+#ifdef BOUNDLESS_USE_UI_RENDER
+const bool USE_UI_RENDER = true;
+#else
+const bool USE_UI_RENDER = false;
+#endif // BOUNDLESS_USE_UI_RENDER
 struct RenderContext {
     uint32_t curFrame, numFrame;
     std::array<CommandBuffer, MAX_FLIGHT_NUM> cmdBufs;
+#ifdef BOUNDLESS_USE_UI_RENDER
+    std::array<CommandBuffer, MAX_FLIGHT_NUM> cmdBufsUI;
+#endif // BOUNDLESS_USE_UI_RENDER
     std::array<Fence, MAX_FLIGHT_NUM> fences;
     std::array<Semaphore, MAX_FLIGHT_NUM> semsImageAvaliable;
+    std::array<Semaphore, MAX_FLIGHT_NUM> semsRenderMainPassFinish;
     std::array<Semaphore, MAX_FLIGHT_NUM> semsRenderFinish;
     std::array<Semaphore, MAX_FLIGHT_NUM> semsOwnershipIsTransfered;
     std::array<CommandBuffer, MAX_FLIGHT_NUM> cmdBuffer_presentation;
@@ -23,6 +37,7 @@ struct RenderContext {
     CommandPool cmdPool_presentation;
     CommandBuffer cmdBuffer_transfer;
     bool ownership_transfer = false;
+    uint32_t image_index;
 
     VkFormat depthFormat;
     std::vector<DepthStencilAttachment> depthAttachments;
@@ -32,11 +47,22 @@ struct RenderDataPackBase{
 };
 extern RenderContext render_context;
 extern VkExtent2D const& window_size;
-bool initVulkanRenderer();
+bool initVulkanRenderer(bool UIRender);
 void terminateVulkanRenderer();
 VkResult _createRenderContext();
 void _destroyRenderContext();
-void render(RenderDataPackBase& packet);
+#ifdef BOUNDLESS_USE_UI_RENDER
+VkResult _createUIRenderContext();
+#endif // BOUNDLESS_USE_UI_RENDER
+// 等待下一张图像可用并在有需要时重建交换链
+void renderBegin();
+void renderCall(RenderDataPackBase& packet);
+void renderEnd(bool delayOwnershipTransfer);
+#ifdef BOUNDLESS_USE_UI_RENDER
+void renderUIBegin();
+void renderUIEnd();
+#endif // BOUNDLESS_USE_UI_RENDER
+void renderPresent();
 VkResult submit_cmdBuffer_graphics_wait(VkCommandBuffer commandBuffer);
 VkResult submit_cmdBuffer_graphics(VkCommandBuffer commandBuffer,
                                    VkFence fence = VK_NULL_HANDLE);

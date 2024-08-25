@@ -8,6 +8,10 @@
 #include <cmath>
 #include <iostream>
 
+#include <imgui/imgui.h>
+#include <imgui/imgui_impl_glfw.h>
+#include <imgui/imgui_impl_vulkan.h>
+
 using namespace BL;
 Camera_debug camera;
 float deltaTime = 0.1f;
@@ -73,21 +77,139 @@ void mouse_callback(GLFWwindow* window, double xposIn, double yposIn) {
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {
     camera.process_mouse_scroll(static_cast<float>(yoffset));
 }
+void glfw_error_callback(int error, const char* description) {
+    print_error("GLFW", error, ':', description);
+}
+void check_vk_result(VkResult error) {
+    if (error == 0)
+        return;
+    print_error("Imgui", "Vulkan Error Code:", error);
+    if (error < 0)
+        abort();
+}
+static DescriptorPool imgui_pool;
+static RenderPass imgui_renderpass;
+std::vector<Framebuffer> imgui_framebuffers;
+static int imgui_swapchain_recreate = 0;
+void initImgui() {
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGuiIO& io = ImGui::GetIO();
+    (void)io;
+    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+    io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
+
+    ImGui::StyleColorsDark();
+    {
+        VkDescriptorPoolSize pool_sizes[] = {
+            {VK_DESCRIPTOR_TYPE_SAMPLER, 10},
+            {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 10},
+            {VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 10},
+            {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 10},
+            {VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 10},
+            {VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, 10},
+            {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 10},
+            {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 10},
+            {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 10},
+            {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 10},
+            {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 10}};
+        imgui_pool.create(10 * IM_ARRAYSIZE(pool_sizes),
+                          (uint32_t)IM_ARRAYSIZE(pool_sizes), pool_sizes,
+                          VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT);
+    }
+    {
+        VkAttachmentDescription attachment = {
+            .format = context.vulkanInfo.swapchainCreateInfo.imageFormat,
+            .samples = VK_SAMPLE_COUNT_1_BIT,
+            .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
+            .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+            .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+            .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+            .initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+            .finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR};
+        VkAttachmentReference color_attachment = {
+            .attachment = 0,
+            .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL};
+        VkSubpassDescription subpass = {
+            .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
+            .colorAttachmentCount = 1,
+            .pColorAttachments = &color_attachment};
+        VkSubpassDependency dependency = {
+            .srcSubpass = VK_SUBPASS_EXTERNAL,
+            .dstSubpass = 0,
+            .srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+            .dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+            .srcAccessMask = 0,  // or VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT
+            .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT};
+        VkRenderPassCreateInfo info = {
+            .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
+            .attachmentCount = 1,
+            .pAttachments = &attachment,
+            .subpassCount = 1,
+            .pSubpasses = &subpass,
+            .dependencyCount = 1,
+            .pDependencies = &dependency};
+        imgui_renderpass.create(info);
+
+        imgui_framebuffers.resize(context.getSwapChainImageCount());
+        VkFramebufferCreateInfo framebufferCreateInfo = {
+            .renderPass = VkRenderPass(imgui_renderpass),
+            .attachmentCount = 1,
+            .width = context.vulkanInfo.swapchainCreateInfo.imageExtent.width,
+            .height = context.vulkanInfo.swapchainCreateInfo.imageExtent.height,
+            .layers = 1};
+        for (size_t i = 0; i < context.getSwapChainImageCount(); i++) {
+            framebufferCreateInfo.pAttachments = &context.vulkanInfo.swapchainImageViews[i];
+            imgui_framebuffers[i].create(framebufferCreateInfo);
+        }
+    }
+    // render_context.cmdBuffer_transfer.begin(
+    //     VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
+    // ImGui_ImplVulkan_CreateFontsTexture(render_context.cmdBuffer_transfer);
+    // render_context.cmdBuffer_transfer.end();
+
+    ImGui_ImplGlfw_InitForVulkan(context.windowInfo.pWindow, true);
+    ImGui_ImplVulkan_InitInfo init_info = {
+        .Instance = context.vulkanInfo.instance,
+        .PhysicalDevice = context.vulkanInfo.phyDevice,
+        .Device = context.vulkanInfo.device,
+        .QueueFamily = context.vulkanInfo.queueFamilyIndex_graphics,
+        .Queue = context.vulkanInfo.queue_graphics,
+        .DescriptorPool = VkDescriptorPool(imgui_pool),
+        .RenderPass = VkRenderPass(imgui_renderpass),
+        .MinImageCount = context.getSwapChainImageCount(),
+        .ImageCount = context.getSwapChainImageCount(),
+        .MSAASamples = VK_SAMPLE_COUNT_1_BIT,
+        .PipelineCache = VK_NULL_HANDLE,
+        .Subpass = 0,
+        .Allocator = VK_NULL_HANDLE,
+        .CheckVkResultFn = check_vk_result};
+    ImGui_ImplVulkan_Init(&init_info);
+
+    auto Recreate = [] {
+        ImGui_ImplVulkan_SetMinImageCount(context.getSwapChainImageCount());
+    };
+    imgui_swapchain_recreate = addCallback_CreateSwapchain(Recreate);
+}
 int main() {
+    glfwSetErrorCallback(glfw_error_callback);
     system("chcp 65001");
-    setWindowInit(800, 600, true);
-    if (!initWindow("Boundless", false, true) || !initVulkan()) {
+    setWindowInit(1200, 900, true);
+    if (!initWindow("Boundless", false, false) || !initVulkan()) {
         return -1;
     }
     glfwSetCursorPosCallback(context.windowInfo.pWindow, mouse_callback);
-    glfwSetKeyCallback(context.windowInfo.pWindow,keyboard_callback);
+    glfwSetKeyCallback(context.windowInfo.pWindow, keyboard_callback);
     glfwSetScrollCallback(context.windowInfo.pWindow, scroll_callback);
     glfwSetInputMode(context.windowInfo.pWindow, GLFW_CURSOR,
                      GLFW_CURSOR_NORMAL);
-    initVulkanRenderer();
+    initVulkanRenderer(true);
     initDepthAttachment();
+    initImgui();
     {
-        print_log("使用说明","按L键解锁/加锁摄像机，WASD移动，QE滚转，TY缩小/放大,箭头上下左右/鼠标移动视角朝向");
+        print_log("使用说明",
+                  "按L键解锁/加锁摄像机，WASD移动，QE滚转，TY缩小/"
+                  "放大,箭头上下左右/鼠标移动视角朝向");
         Uniform_LightUniform uniform_light_uniform;
         uniform_light_uniform.lightCount = 4;
         uniform_light_uniform.light[0] = {
@@ -194,13 +316,41 @@ int main() {
                     &uniform_sence_uniform);
                 changedFlag = false;
             }
-            render(renderPack);
+            {  // 渲染UI
+                ImGui_ImplVulkan_NewFrame();
+                ImGui_ImplGlfw_NewFrame();
+                ImGui::NewFrame();
+                ImGui::ShowDemoWindow();
+                ImGui::Render();
+            }
+            ImDrawData* draw_data = ImGui::GetDrawData();
+            renderBegin();
+            renderCall(renderPack);
+            renderEnd(true);
+            renderUIBegin();
+            auto& buf = render_context.cmdBufsUI[render_context.curFrame];
+            imgui_renderpass.cmd_begin(
+                VkCommandBuffer(buf),
+                VkFramebuffer(imgui_framebuffers[render_context.image_index]),
+                {{}, context.vulkanInfo.swapchainCreateInfo.imageExtent});
+            ImGui_ImplVulkan_RenderDrawData(draw_data, buf);
+            imgui_renderpass.cmd_end(buf);
+            renderUIEnd();
+            renderPresent();
             glfwPollEvents();
             process_input(context.windowInfo.pWindow);
             calcFps();
         }
         waitAll();
     }
+    removeCallback_CreateSwapchain(imgui_swapchain_recreate);
+    ImGui_ImplVulkan_Shutdown();
+    ImGui_ImplGlfw_Shutdown();
+    ImGui::DestroyContext();
+    imgui_pool.~DescriptorPool();
+    imgui_renderpass.~RenderPass();
+    imgui_framebuffers.clear();
+
     destroyDepthAttachment();
     terminateVulkanRenderer();
     terminateVulkan();
