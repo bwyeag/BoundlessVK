@@ -1,8 +1,8 @@
 #include <render.hpp>
 namespace BL {
-RenderContext render_context;
+RenderContext render_CurContext();
 VkExtent2D const& window_size =
-    context.vulkanInfo.swapchainCreateInfo.imageExtent;
+    CurContext().vulkanInfo.swapchainCreateInfo.imageExtent;
 bool initVulkanRenderer(bool UIRender) {
     if (_createRenderContext())
         return false;
@@ -21,25 +21,25 @@ void terminateVulkanRenderer() {
     _destroyRenderContext();
 }
 VkResult _createRenderContext() {
-    auto& info = context.vulkanInfo;
+    auto& info = CurContext().vulkanInfo;
     VkResult result;
     if (info.queueFamilyIndex_graphics != VK_QUEUE_FAMILY_IGNORED) {
-        result = render_context.cmdPool_graphics.create(
+        result = render_CurContext().cmdPool_graphics.create(
             info.queueFamilyIndex_graphics,
             VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
         if (result)
             goto CREATE_FAILED;
-        result = render_context.cmdPool_graphics.allocate_buffer(
-            &render_context.cmdBuffer_transfer);
+        result = render_CurContext().cmdPool_graphics.allocate_buffer(
+            &render_CurContext().cmdBuffer_transfer);
         if (result)
             goto CREATE_FAILED;
-        result = render_context.cmdPool_graphics.allocate_buffers(
-            render_context.cmdBufs.data(), MAX_FLIGHT_NUM);
+        result = render_CurContext().cmdPool_graphics.allocate_buffers(
+            render_CurContext().cmdBufs.data(), MAX_FLIGHT_NUM);
         if (result)
             goto CREATE_FAILED;
     }
     if (info.queueFamilyIndex_presentation != VK_QUEUE_FAMILY_IGNORED) {
-        result = render_context.cmdPool_compute.create(
+        result = render_CurContext().cmdPool_compute.create(
             info.queueFamilyIndex_presentation,
             VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
         if (result)
@@ -51,28 +51,28 @@ VkResult _createRenderContext() {
          info.swapchainCreateInfo.imageSharingMode ==
              VK_SHARING_MODE_EXCLUSIVE) ||
         FORCE_OWNERSHIP_TRANSFER) {
-        result = render_context.cmdPool_presentation.create(
+        result = render_CurContext().cmdPool_presentation.create(
             info.queueFamilyIndex_presentation,
             VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
         if (result)
             goto CREATE_FAILED;
-        result = render_context.cmdPool_presentation.allocate_buffers(
-            render_context.cmdBuffer_presentation.data(), MAX_FLIGHT_NUM);
+        result = render_CurContext().cmdPool_presentation.allocate_buffers(
+            render_CurContext().cmdBuffer_presentation.data(), MAX_FLIGHT_NUM);
         if (result)
             goto CREATE_FAILED;
-        for (auto& it : render_context.semsOwnershipIsTransfered)
+        for (auto& it : render_CurContext().semsOwnershipIsTransfered)
             it.create();
         // 决定是否需要进行所有权转移
-        render_context.ownership_transfer = true;
+        render_CurContext().ownership_transfer = true;
     }
-    render_context.curFrame = 0;
-    for (auto& it : render_context.fences)
+    render_CurContext().curFrame = 0;
+    for (auto& it : render_CurContext().fences)
         it.create(VK_FENCE_CREATE_SIGNALED_BIT);
-    for (auto& it : render_context.semsImageAvaliable)
+    for (auto& it : render_CurContext().semsImageAvaliable)
         it.create();
-    for (auto& it : render_context.semsRenderFinish)
+    for (auto& it : render_CurContext().semsRenderFinish)
         it.create();
-    for (auto& it : render_context.semsRenderMainPassFinish)
+    for (auto& it : render_CurContext().semsRenderMainPassFinish)
         it.create();
     return VK_SUCCESS;
 CREATE_FAILED:
@@ -81,24 +81,24 @@ CREATE_FAILED:
     return result;
 }
 void _destroyRenderContext() {
-    render_context.cmdPool_presentation.~CommandPool();
-    render_context.cmdPool_graphics.~CommandPool();
-    render_context.cmdPool_compute.~CommandPool();
-    for (auto& it : render_context.fences)
+    render_CurContext().cmdPool_presentation.~CommandPool();
+    render_CurContext().cmdPool_graphics.~CommandPool();
+    render_CurContext().cmdPool_compute.~CommandPool();
+    for (auto& it : render_CurContext().fences)
         it.~Fence();
-    for (auto& it : render_context.semsImageAvaliable)
+    for (auto& it : render_CurContext().semsImageAvaliable)
         it.~Semaphore();
-    for (auto& it : render_context.semsRenderFinish)
+    for (auto& it : render_CurContext().semsRenderFinish)
         it.~Semaphore();
-    for (auto& it : render_context.semsOwnershipIsTransfered)
+    for (auto& it : render_CurContext().semsOwnershipIsTransfered)
         it.~Semaphore();
-    for (auto& it : render_context.semsRenderMainPassFinish)
+    for (auto& it : render_CurContext().semsRenderMainPassFinish)
         it.~Semaphore();
 }
 #ifdef BOUNDLESS_USE_UI_RENDER
 VkResult _createUIRenderContext() {
-    render_context.cmdPool_graphics.allocate_buffers(
-        render_context.cmdBufsUI.data(), MAX_FLIGHT_NUM);
+    render_CurContext().cmdPool_graphics.allocate_buffers(
+        render_CurContext().cmdBufsUI.data(), MAX_FLIGHT_NUM);
     return VK_SUCCESS;
 }
 #endif  // BOUNDLESS_USE_UI_RENDER
@@ -117,7 +117,7 @@ VkResult submit_cmdBuffer_graphics(VkCommandBuffer commandBuffer,
     VkSubmitInfo submitInfo = {.commandBufferCount = 1,
                                .pCommandBuffers = &commandBuffer};
     VkResult result =
-        vkQueueSubmit(context.vulkanInfo.queue_compute, 1, &submitInfo, fence);
+        vkQueueSubmit(CurContext().vulkanInfo.queue_compute, 1, &submitInfo, fence);
     if (result) {
         print_error("submit_cmdBuffer_graphics",
                     "submit failed! Code:", int32_t(result));
@@ -140,7 +140,7 @@ VkResult submit_cmdBuffer_compute(VkCommandBuffer commandBuffer,
     VkSubmitInfo submitInfo = {.commandBufferCount = 1,
                                .pCommandBuffers = &commandBuffer};
     VkResult result =
-        vkQueueSubmit(context.vulkanInfo.queue_compute, 1, &submitInfo, fence);
+        vkQueueSubmit(CurContext().vulkanInfo.queue_compute, 1, &submitInfo, fence);
     if (result) {
         print_error("submit_cmdBuffer_compute",
                     "submit failed! Code:", int32_t(result));
@@ -156,9 +156,9 @@ void _insertCmd_transfer_image_ownership(VkCommandBuffer commandBuffer,
         .dstAccessMask = 0,
         .oldLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
         .newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-        .srcQueueFamilyIndex = context.vulkanInfo.queueFamilyIndex_graphics,
-        .dstQueueFamilyIndex = context.vulkanInfo.queueFamilyIndex_presentation,
-        .image = context.vulkanInfo.swapchainImages[index],
+        .srcQueueFamilyIndex = CurContext().vulkanInfo.queueFamilyIndex_graphics,
+        .dstQueueFamilyIndex = CurContext().vulkanInfo.queueFamilyIndex_presentation,
+        .image = CurContext().vulkanInfo.swapchainImages[index],
         .subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1}};
     vkCmdPipelineBarrier(
         commandBuffer, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
@@ -182,7 +182,7 @@ VkResult submit_buffer_presentation(
     if (semaphore_ownershipIsTransfered)
         submitInfo.signalSemaphoreCount = 1,
         submitInfo.pSignalSemaphores = &semaphore_ownershipIsTransfered;
-    VkResult result = vkQueueSubmit(context.vulkanInfo.queue_presentation, 1,
+    VkResult result = vkQueueSubmit(CurContext().vulkanInfo.queue_presentation, 1,
                                     &submitInfo, fence);
     if (result)
         print_error("submit_buffer_presentation",
@@ -191,11 +191,11 @@ VkResult submit_buffer_presentation(
     return result;
 }
 void renderBegin() {
-    auto& vkInfo = context.vulkanInfo;
+    auto& vkInfo = CurContext().vulkanInfo;
     auto& device = vkInfo.device;
     auto& swapchain = vkInfo.swapchain;
     auto& swapchainInfo = vkInfo.swapchainCreateInfo;
-    RenderContext& loop = render_context;
+    RenderContext& loop = render_CurContext();
     // 检查是否存在旧交换链，如果存在则销毁
     if (swapchainInfo.oldSwapchain && swapchainInfo.oldSwapchain != swapchain) {
         vkDestroySwapchainKHR(device, swapchainInfo.oldSwapchain, nullptr);
@@ -219,11 +219,11 @@ void renderBegin() {
     curBuf.begin(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
 }
 void renderCall(RenderDataPackBase& packet) {
-    packet.pRenderFunction(render_context.cmdBufs[render_context.curFrame],
-                           packet, render_context.image_index);
+    packet.pRenderFunction(render_CurContext().cmdBufs[render_CurContext().curFrame],
+                           packet, render_CurContext().image_index);
 }
 void renderEnd(bool delayOwnershipTransfer) {
-    RenderContext& loop = render_context;
+    RenderContext& loop = render_CurContext();
     auto& curBuf = loop.cmdBufs[loop.curFrame];
     if (!delayOwnershipTransfer && loop.ownership_transfer) {
         _insertCmd_transfer_image_ownership(curBuf, loop.image_index);
@@ -255,7 +255,7 @@ void renderEnd(bool delayOwnershipTransfer) {
             fence = VkFence(loop.fences[loop.curFrame]);
         }
     }
-    VkResult result = vkQueueSubmit(context.vulkanInfo.queue_graphics, 1,
+    VkResult result = vkQueueSubmit(CurContext().vulkanInfo.queue_graphics, 1,
                                     &submit_info, fence);
     if (result != VK_SUCCESS) {
         print_error("render()", "vkQueueSubmit() failed! Code:", result);
@@ -263,12 +263,12 @@ void renderEnd(bool delayOwnershipTransfer) {
 }
 #ifdef BOUNDLESS_USE_UI_RENDER
 void renderUIBegin() {
-    RenderContext& loop = render_context;
+    RenderContext& loop = render_CurContext();
     auto& curBuf = loop.cmdBufsUI[loop.curFrame];
     curBuf.begin(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
 }
 void renderUIEnd() {
-    RenderContext& loop = render_context;
+    RenderContext& loop = render_CurContext();
     auto& curBuf = loop.cmdBufsUI[loop.curFrame];
     if (loop.ownership_transfer) {
         _insertCmd_transfer_image_ownership(curBuf, loop.image_index);
@@ -290,7 +290,7 @@ void renderUIEnd() {
                 ? loop.semsOwnershipIsTransfered[loop.curFrame].getPointer()
                 : loop.semsRenderFinish[loop.curFrame].getPointer()};
     VkResult result = vkQueueSubmit(
-        context.vulkanInfo.queue_graphics, 1, &submit_info,
+        CurContext().vulkanInfo.queue_graphics, 1, &submit_info,
         loop.ownership_transfer ? VK_NULL_HANDLE
                                 : VkFence(loop.fences[loop.curFrame]));
     if (result != VK_SUCCESS) {
@@ -299,7 +299,7 @@ void renderUIEnd() {
 }
 #endif  // BOUNDLESS_USE_UI_RENDER
 void renderPresent() {
-    RenderContext& loop = render_context;
+    RenderContext& loop = render_CurContext();
     // 发送呈现命令
     if (loop.ownership_transfer) {
         loop.cmdBuffer_presentation[loop.curFrame].begin(
@@ -321,9 +321,9 @@ void renderPresent() {
 VkResult acquire_next_image(uint32_t* index,
                             VkSemaphore semsImageAvaliable,
                             VkFence fence) {
-    VkExtent2D& t = context.vulkanInfo.swapchainCreateInfo.imageExtent;
+    VkExtent2D& t = CurContext().vulkanInfo.swapchainCreateInfo.imageExtent;
     while (VkResult result = vkAcquireNextImageKHR(
-               context.vulkanInfo.device, context.vulkanInfo.swapchain,
+               CurContext().vulkanInfo.device, CurContext().vulkanInfo.swapchain,
                UINT64_MAX, semsImageAvaliable, fence,
                index)) {  // 如果获取失败则重建交换链
         switch (result) {
@@ -349,10 +349,10 @@ VkResult present_image(uint32_t* index,
         .waitSemaphoreCount = waitSemsCount,
         .pWaitSemaphores = sems,
         .swapchainCount = 1,
-        .pSwapchains = &context.vulkanInfo.swapchain,
+        .pSwapchains = &CurContext().vulkanInfo.swapchain,
         .pImageIndices = index};
     VkResult result =
-        vkQueuePresentKHR(context.vulkanInfo.queue_presentation, &present_info);
+        vkQueuePresentKHR(CurContext().vulkanInfo.queue_presentation, &present_info);
     switch (result) {
         case VK_SUCCESS:
             break;
@@ -371,30 +371,30 @@ VkResult present_image(uint32_t* index,
 static int depth_attachment_callback_create;
 static int depth_attachment_callback_destroy;
 void initDepthAttachment() {
-    render_context.depthFormat = VK_FORMAT_D24_UNORM_S8_UINT;
+    render_CurContext().depthFormat = VK_FORMAT_D24_UNORM_S8_UINT;
     auto Create = []() {
-        render_context.depthAttachments.resize(
-            context.getSwapChainImageCount());
-        for (auto& it : render_context.depthAttachments) {
+        render_CurContext().depthAttachments.resize(
+            CurContext().getSwapChainImageCount());
+        for (auto& it : render_CurContext().depthAttachments) {
             it.create(VK_FORMAT_D24_UNORM_S8_UINT, window_size);
         }
     };
-    auto Destroy = []() { render_context.depthAttachments.clear(); };
+    auto Destroy = []() { render_CurContext().depthAttachments.clear(); };
     Create();
-    depth_attachment_callback_create = addCallback_CreateSwapchain(Create);
-    depth_attachment_callback_destroy = addCallback_DestroySwapchain(Destroy);
+    depth_attachment_callback_create = CurContext().callback_createSwapchain.insert(Create);
+    depth_attachment_callback_destroy = CurContext().callback_destroySwapchain.insert(Destroy);
 }
 void destroyDepthAttachment() {
-    removeCallback_CreateSwapchain(depth_attachment_callback_create);
-    removeCallback_DestroySwapchain(depth_attachment_callback_destroy);
-    render_context.depthAttachments.clear();
+    CurContext().callback_createSwapchain.erase(depth_attachment_callback_create);
+    CurContext().callback_createSwapchain.erase(depth_attachment_callback_destroy);
+    render_CurContext().depthAttachments.clear();
 }
 RenderPassPackBase::~RenderPassPackBase() {
-    removeCallback_CreateSwapchain(callback_c_id);
-    removeCallback_DestroySwapchain(callback_d_id);
+    CurContext().callback_createSwapchain.insert(callback_c_id);
+    CurContext().callback_createSwapchain.erase(callback_d_id);
 }
 RenderPipelineBase::~RenderPipelineBase() {
-    removeCallback_CreateSwapchain(callback_c_id);
-    removeCallback_DestroySwapchain(callback_d_id);
+    CurContext().callback_createSwapchain.insert(callback_c_id);
+    CurContext().callback_createSwapchain.erase(callback_d_id);
 }
 }  // namespace BL

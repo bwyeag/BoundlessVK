@@ -5,21 +5,23 @@
 #include <functional>
 #include <map>
 #include <sstream>
+#include <string>
 #include <vector>
 #include "log.hpp"
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 #include <vulkan/vulkan.h>
+#include "callback.hpp"
 #include "vk_mem_alloc.h"
 namespace BL {
 const uint32_t API_VERSION = VK_API_VERSION_1_3;
 struct WindowContext {
     GLFWwindow* pWindow;
     GLFWmonitor* pMonitor;
-    const char* pTitle; /*指向窗口标题的指针，必须保持有效*/
+    std::string title;
     uint32_t width, height;
     bool isFullScreen = false;
-    bool isFpsDisplayed = false;
+    bool isFpsDisplayed_debug = false;
     double lastTime = 0.0;
     double currentTime = 0.0;
     double deltaTime = 0.0;
@@ -59,37 +61,50 @@ struct VulkanContext {
 struct Context {
     WindowContext windowInfo;
     VulkanContext vulkanInfo;
-    std::map<int, std::function<void()> > callbacks_createSwapchain;
-    std::map<int, std::function<void()> > callbacks_destroySwapchain;
+    CallbackList<void()> callback_createSwapchain;
+    CallbackList<void()> callback_destroySwapchain;
+    CallbackList<void(GLFWwindow*, double, double)> callback_cursorPos;
+    CallbackList<void(GLFWwindow*, int, int, int, int)> callback_key;
+    CallbackList<void(GLFWwindow*, double, double)> callback_scroll;
     uint32_t getSwapChainImageCount() const {
         return this->vulkanInfo.swapchainImageViews.size();
+    }
+    // Window 相关函数
+
+    // 获取当前帧的开始时间
+    double getCurrentFrameTime() const { return this->windowInfo.currentTime; }
+    float getCurrentFrameTimef() const {
+        return static_cast<float>(this->windowInfo.currentTime);
+    }
+    // 获取上一帧的持续时间
+    double getDeltaFrameTime() const { return this->windowInfo.deltaTime; }
+    float getDeltaFrameTimef() const {
+        return static_cast<float>(this->windowInfo.deltaTime);
+    }
+    void isWindowFullScreen() const { return this->windowInfo.isFullScreen; }
+    void isWindowFpsDisplayed() const {
+        return this->windowInfo.isFpsDisplayed_debug;
+    }
+    void setWindowInit(int w, int h, bool isFpsDisplayed);
+    void setWindowTitle(const char* newTitle);
+    void setWindowTitle(const std::string& newTitle);
+    void updateInfo(); /*此函数同时处理FPS显示*/
+    bool initWindow(const char* title, bool fullScreen, bool isResizable);
+    void setWindowFullSrceen();
+    void setWindowWindowed(int offsetX, int offsetY, int width, int height);
+    bool checkWindowClose();
+    bool terminateWindow();
+    inline bool checkWindowClose() {
+        return glfwWindowShouldClose(CurContext().windowInfo.pWindow);
     }
 };
 const uint32_t MAX_FLIGHT_NUM = 3;
 extern Context context;
-void _iterateCallback_CreateSwapchain();
-void _iterateCallback_DestroySwapchain();
-int addCallback_CreateSwapchain(std::function<void()> p);
-int addCallback_DestroySwapchain(std::function<void()> p);
-void removeCallback_CreateSwapchain(int id);
-void removeCallback_DestroySwapchain(int id);
-/*
- * 窗口相关函数
- */
+inline Context& CurContext() {
+    return context;
+}
 const double FPS_DISPLAY_DELTA_TIME = 1.0; /*FPS显示间隔时间，以秒为单位*/
 const bool PRINT_DEVICE_EXTENSIONS = false;
-void setWindowInit(int w, int h, bool isFpsDisplayed);
-void setWindowTitle(
-    const char* newTitle); /*newTitle 指针必须在下一次调用前保持可用*/
-void calcFps();            /*此函数同时处理FPS显示*/
-bool initWindow(const char* title, bool fullScreen, bool isResizable);
-void setWindowFullSrceen();
-void setWindowWindowed(int offsetX, int offsetY, int width, int height);
-bool checkWindowClose();
-bool terminateWindow();
-inline bool checkWindowClose() {
-    return glfwWindowShouldClose(context.windowInfo.pWindow);
-}
 /*
  * 渲染初始化相关函数
  */

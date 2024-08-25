@@ -71,7 +71,7 @@ class ColorAttachment : public Attachment {
     static bool format_availability(VkFormat format,
                                     bool supportBlending = true) {
         VkFormatProperties properties;
-        vkGetPhysicalDeviceFormatProperties(context.vulkanInfo.phyDevice,
+        vkGetPhysicalDeviceFormatProperties(CurContext().vulkanInfo.phyDevice,
                                             format, &properties);
         return properties.optimalTilingFeatures &
                VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT
@@ -135,7 +135,7 @@ class DepthStencilAttachment : public Attachment {
     // 该函数用于检查某一格式的图像可否被用作深度模板附件
     static bool format_availability(VkFormat format) {
         VkFormatProperties properties;
-        vkGetPhysicalDeviceFormatProperties(context.vulkanInfo.phyDevice,
+        vkGetPhysicalDeviceFormatProperties(CurContext().vulkanInfo.phyDevice,
                                             format, &properties);
         return properties.optimalTilingFeatures &
                VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT;

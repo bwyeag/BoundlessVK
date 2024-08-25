@@ -1,22 +1,27 @@
 #include "BL/init.hpp"
 namespace BL {
-Context context;
+Context CurContext();
 /*
  * 窗口相关函数
  */
-void setWindowInit(int w, int h, bool isFpsDisplayed) {
-    auto& wInfo = context.windowInfo;
+void Context::setWindowInit(int w, int h, bool isFpsDisplayed) {
+    auto& wInfo = windowInfo;
     wInfo.width = w;
     wInfo.height = h;
-    wInfo.isFpsDisplayed = isFpsDisplayed;
+    wInfo.isFpsDisplayed_debug = isFpsDisplayed;
 }
-void setWindowTitle(const char* newTitle) {
-    auto& wInfo = context.windowInfo;
-    wInfo.pTitle = newTitle;
+void Context::setWindowTitle(const char* newTitle) {
+    auto& wInfo = windowInfo;
+    wInfo.title = newTitle;
     glfwSetWindowTitle(wInfo.pWindow, newTitle);
 }
-void calcFps() {
-    auto& wInfo = context.windowInfo;
+void Context::setWindowTitle(const std::string& newTitle) {
+    auto& wInfo = windowInfo;
+    wInfo.title = newTitle;
+    glfwSetWindowTitle(wInfo.pWindow, newTitle.c_str());
+}
+void Context::updateInfo() {
+    auto& wInfo = windowInfo;
     static double last_time = glfwGetTime();
     static double delta_time = 0.0;
     static uint32_t delta_frame = -1;
@@ -24,18 +29,18 @@ void calcFps() {
     wInfo.lastTime = wInfo.currentTime;
     wInfo.currentTime = glfwGetTime();
     wInfo.deltaTime = wInfo.currentTime - wInfo.lastTime;
-    if (wInfo.isFpsDisplayed) {
+    if (wInfo.isFpsDisplayed_debug) {
         delta_frame++;
         if ((delta_time = wInfo.currentTime - last_time) >=
             FPS_DISPLAY_DELTA_TIME) {
             if (!wInfo.isFullScreen) {
                 info.precision(1);
-                info << wInfo.pTitle << "  " << std::fixed
+                info << wInfo.title << "  " << std::fixed
                      << delta_frame / delta_time << " FPS";
                 glfwSetWindowTitle(wInfo.pWindow, info.str().c_str());
                 info.str("");
             } else {
-                glfwSetWindowTitle(wInfo.pWindow, wInfo.pTitle);
+                glfwSetWindowTitle(wInfo.pWindow, wInfo.title.c_str());
             }
             last_time = wInfo.currentTime;
             delta_frame = 0;
@@ -43,20 +48,41 @@ void calcFps() {
     }
 }
 static void _size_callback(GLFWwindow* window, int width, int height) {
-    context.windowInfo.height = height;
-    context.windowInfo.width = width;
+    CurContext().windowInfo.height = height;
+    CurContext().windowInfo.width = width;
     print_log("WindowSize", "New window size(w/h):", width, height);
 }
-bool initWindow(const char* title, bool fullScreen, bool isResizable) {
+static void _glfw_error_callback(int error, const char* description) {
+    print_error("GLFW", error, ':', description);
+}
+static void _cursor_pos_callback(GLFWwindow* window,
+                                 double xposIn,
+                                 double yposIn) {
+    CurContext().callback_cursorPos.iterate(window, xposIn, yposIn);
+}
+static void _scroll_callback(GLFWwindow* window,
+                             double xoffset,
+                             double yoffset) {
+    CurContext().callback_scroll.iterate(window, xoffset, yoffset);
+}
+static void _key_callback(GLFWwindow* window,
+                          int key,
+                          int scancode,
+                          int action,
+                          int mods) {
+    CurContext().callback_key.iterate(window, key, scancode, action, mods);
+}
+bool Context::initWindow(const char* title, bool fullScreen, bool isResizable) {
+    glfwSetErrorCallback(_glfw_error_callback);
     if (!glfwInit()) {
         print_error("InitWindow", "GLFW init failed!");
         return false;
     }
-    auto& wInfo = context.windowInfo;
+    auto& wInfo = this->windowInfo;
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     glfwWindowHint(GLFW_RESIZABLE, isResizable);
     wInfo.pMonitor = glfwGetPrimaryMonitor();
-    wInfo.pTitle = title;
+    wInfo.title = title;
     if (fullScreen) {
         wInfo.isFullScreen = true;
         const GLFWvidmode* pMode = glfwGetVideoMode(wInfo.pMonitor);
@@ -74,25 +100,29 @@ bool initWindow(const char* title, bool fullScreen, bool isResizable) {
         glfwTerminate();
         return false;
     }
+    glfwSetCursorPosCallback(this->windowInfo.pWindow, _cursor_pos_callback);
+    glfwSetKeyCallback(this->windowInfo.pWindow, _key_callback);
+    glfwSetScrollCallback(this->windowInfo.pWindow, _scroll_callback);
     return true;
 }
-void setWindowFullSrceen() {
-    auto& wInfo = context.windowInfo;
+void Context::setWindowFullSrceen() {
+    auto& wInfo = this->windowInfo;
     const GLFWvidmode* pMode = glfwGetVideoMode(wInfo.pMonitor);
     glfwSetWindowMonitor(wInfo.pWindow, wInfo.pMonitor, 0, 0, pMode->width,
                          pMode->height, pMode->refreshRate);
     recreateSwapchain();
 }
-void setWindowWindowed(int offsetX, int offsetY, int width, int height) {
-    auto& wInfo = context.windowInfo;
-    const GLFWvidmode* pMode = glfwGetVideoMode(wInfo.pMonitor);
-    glfwSetWindowMonitor(wInfo.pWindow, nullptr, offsetX, offsetY, width,
+void Context::setWindowWindowed(int offsetX,
+                                int offsetY,
+                                int width,
+                                int height) {
+    const GLFWvidmode* pMode = glfwGetVideoMode(windowInfo.pMonitor);
+    glfwSetWindowMonitor(windowInfo.pWindow, nullptr, offsetX, offsetY, width,
                          height, pMode->refreshRate);
     recreateSwapchain();
 }
-bool terminateWindow() {
-    auto& wInfo = context.windowInfo;
-    glfwDestroyWindow(wInfo.pWindow);
+bool Context::terminateWindow() {
+    glfwDestroyWindow(windowInfo.pWindow);
     glfwTerminate();
     return true;
 }
@@ -171,7 +201,7 @@ bool _createInstance() {
         .ppEnabledExtensionNames = extensions.data()};
 
     if (VkResult result = vkCreateInstance(&createInfo, nullptr,
-                                           &context.vulkanInfo.instance)) {
+                                           &CurContext().vulkanInfo.instance)) {
         print_error("VulkanInit", "Vulkan instance create failed",
                     int32_t(result));
         return false;
@@ -201,12 +231,12 @@ VkResult _createDebugMessenger() {
         .pfnUserCallback = DebugUtilsMessengerCallback};
     PFN_vkCreateDebugUtilsMessengerEXT vkCreateDebugUtilsMessenger =
         reinterpret_cast<PFN_vkCreateDebugUtilsMessengerEXT>(
-            vkGetInstanceProcAddr(context.vulkanInfo.instance,
+            vkGetInstanceProcAddr(CurContext().vulkanInfo.instance,
                                   "vkCreateDebugUtilsMessengerEXT"));
     if (vkCreateDebugUtilsMessenger) {
         VkResult result = vkCreateDebugUtilsMessenger(
-            context.vulkanInfo.instance, &debugUtilsMessengerCreateInfo,
-            nullptr, &context.vulkanInfo.debugger);
+            CurContext().vulkanInfo.instance, &debugUtilsMessengerCreateInfo,
+            nullptr, &CurContext().vulkanInfo.debugger);
         if (result)
             print_error("InitVulkan",
                         "Failed to create debug messenger! Error code:",
@@ -221,8 +251,8 @@ VkResult _createDebugMessenger() {
 #endif  // BL_DEBUG
 VkResult _createSurface() {
     if (VkResult result = glfwCreateWindowSurface(
-            context.vulkanInfo.instance, context.windowInfo.pWindow, nullptr,
-            &context.vulkanInfo.surface)) {
+            CurContext().vulkanInfo.instance, CurContext().windowInfo.pWindow,
+            nullptr, &CurContext().vulkanInfo.surface)) {
         print_error("InitVulkan", "Window surface create failed! Error code: ",
                     int32_t(result));
         return result;
@@ -233,7 +263,7 @@ VkResult _getPhysicalDevices(
     std::vector<VkPhysicalDevice>& avaliablePhyDevices) {
     uint32_t deviceCount;
     if (VkResult result = vkEnumeratePhysicalDevices(
-            context.vulkanInfo.instance, &deviceCount, nullptr)) {
+            CurContext().vulkanInfo.instance, &deviceCount, nullptr)) {
         print_error("InitVulkan",
                     "Failed to get the count of physical devices! "
                     "Error code: ",
@@ -247,8 +277,9 @@ VkResult _getPhysicalDevices(
         abort();
     }
     avaliablePhyDevices.resize(deviceCount);
-    VkResult result = vkEnumeratePhysicalDevices(
-        context.vulkanInfo.instance, &deviceCount, avaliablePhyDevices.data());
+    VkResult result =
+        vkEnumeratePhysicalDevices(CurContext().vulkanInfo.instance,
+                                   &deviceCount, avaliablePhyDevices.data());
     if (result)
         print_error("InitVulkan",
                     "Failed to enumerate physical devices! Error code: ",
@@ -256,7 +287,7 @@ VkResult _getPhysicalDevices(
     return result;
 }
 VkResult _getQueueFamilyIndices(VkPhysicalDevice physicalDevice) {
-    auto& info = context.vulkanInfo;
+    auto& info = CurContext().vulkanInfo;
     uint32_t queueFamilyCount = 0;
     vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount,
                                              nullptr);
@@ -296,9 +327,9 @@ VkResult _selectPhysicalDevice() {
     if (VkResult result = _getPhysicalDevices(avaliablePhyDevices)) {
         return result;
     }
-    context.vulkanInfo.phyDevice = avaliablePhyDevices[0];
+    CurContext().vulkanInfo.phyDevice = avaliablePhyDevices[0];
     if (VkResult result =
-            _getQueueFamilyIndices(context.vulkanInfo.phyDevice)) {
+            _getQueueFamilyIndices(CurContext().vulkanInfo.phyDevice)) {
         return result;
     }
     return VK_SUCCESS;
@@ -327,7 +358,7 @@ std::vector<const char*> _selectDeviceExtensions(
     return extensions;
 }
 std::vector<VkExtensionProperties> _getDeviceExtensions() {
-    auto& info = context.vulkanInfo;
+    auto& info = CurContext().vulkanInfo;
     std::vector<VkExtensionProperties> ext;
     uint32_t ext_count = 0;
     VkResult res = vkEnumerateDeviceExtensionProperties(info.phyDevice, nullptr,
@@ -348,7 +379,7 @@ std::vector<VkExtensionProperties> _getDeviceExtensions() {
     return ext;
 }
 VkResult _createDevice(VmaAllocatorCreateFlags* out_flag) {
-    auto& info = context.vulkanInfo;
+    auto& info = CurContext().vulkanInfo;
     float queuePriority = 1.0f;
     // 1.构建队列创建表
     VkDeviceQueueCreateInfo queue_create_infos[3] = {
@@ -412,8 +443,7 @@ VkResult _createDevice(VmaAllocatorCreateFlags* out_flag) {
     _setDeviceCreateInfoPNexets(&info.phyDeviceProperties);
     //   设备特性:
     if constexpr (API_VERSION >= VK_API_VERSION_1_1) {
-        info.phyDeviceFeatures = {
-            VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2};
+        info.phyDeviceFeatures = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2};
         info.phyDeviceVulkan11Features = {
             VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES};
         info.phyDeviceVulkan12Features = {
@@ -421,16 +451,14 @@ VkResult _createDevice(VmaAllocatorCreateFlags* out_flag) {
         info.phyDeviceVulkan13Features = {
             VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES};
         if constexpr (API_VERSION >= VK_API_VERSION_1_2) {
-            info.phyDeviceFeatures.pNext =
-                &info.phyDeviceVulkan11Features;
+            info.phyDeviceFeatures.pNext = &info.phyDeviceVulkan11Features;
             info.phyDeviceVulkan11Features.pNext =
                 &info.phyDeviceVulkan12Features;
             if constexpr (API_VERSION >= VK_API_VERSION_1_3)
                 info.phyDeviceVulkan12Features.pNext =
                     &info.phyDeviceVulkan13Features;
         }
-        vkGetPhysicalDeviceFeatures2(info.phyDevice,
-                                     &info.phyDeviceFeatures);
+        vkGetPhysicalDeviceFeatures2(info.phyDevice, &info.phyDeviceFeatures);
     } else
         vkGetPhysicalDeviceFeatures(info.phyDevice,
                                     &info.phyDeviceFeatures.features);
@@ -476,7 +504,7 @@ void _setDeviceCreateInfoPNexets(VkPhysicalDeviceProperties2* prooerties) {
     // 此函数暂时用不到编写,除非需要使用设备的其他特性,如光线追踪,注意:传入指针的pNext可能含有其他结构体,并且,注意对象生存期
 }
 VkResult _getSurfaceFormats(std::vector<VkSurfaceFormatKHR>& formats) {
-    auto& info = context.vulkanInfo;
+    auto& info = CurContext().vulkanInfo;
     uint32_t format_count;
     if (VkResult result = vkGetPhysicalDeviceSurfaceFormatsKHR(
             info.phyDevice, info.surface, &format_count, nullptr)) {
@@ -504,7 +532,7 @@ VkResult _getSurfaceFormats(std::vector<VkSurfaceFormatKHR>& formats) {
 }
 VkResult _createSwapchain(bool limitFrameRate,
                           VkSwapchainCreateFlagsKHR flags) {
-    auto& info = context.vulkanInfo;
+    auto& info = CurContext().vulkanInfo;
     VkSurfaceCapabilitiesKHR surface_capabilities = {};
     if (VkResult result = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(
             info.phyDevice, info.surface, &surface_capabilities)) {
@@ -520,10 +548,10 @@ VkResult _createSwapchain(bool limitFrameRate,
                                 surface_capabilities.minImageCount);
     createInfo.imageExtent =
         surface_capabilities.currentExtent.width == (~0u)
-            ? VkExtent2D{std::clamp(context.windowInfo.width,
+            ? VkExtent2D{std::clamp(CurContext().windowInfo.width,
                                     surface_capabilities.minImageExtent.width,
                                     surface_capabilities.maxImageExtent.width),
-                         std::clamp(context.windowInfo.height,
+                         std::clamp(CurContext().windowInfo.height,
                                     surface_capabilities.minImageExtent.height,
                                     surface_capabilities.maxImageExtent.height)}
             : surface_capabilities.currentExtent;
@@ -611,11 +639,11 @@ VkResult _createSwapchain(bool limitFrameRate,
     createInfo.clipped = VK_TRUE;
     if (VkResult result = _createSwapChain_Internal())
         return result;
-    _iterateCallback_CreateSwapchain();
+    CurContext().callback_createSwapchain.iterate();
     return VK_SUCCESS;
 }
 VkResult _createSwapChain_Internal() {
-    auto& info = context.vulkanInfo;
+    auto& info = CurContext().vulkanInfo;
     auto& createInfo = info.swapchainCreateInfo;
     if (VkResult result = vkCreateSwapchainKHR(info.device, &createInfo,
                                                nullptr, &info.swapchain)) {
@@ -666,7 +694,7 @@ VkResult _createSwapChain_Internal() {
 VkResult _setSurfaceFormat(
     VkSurfaceFormatKHR surfaceFormat,
     std::vector<VkSurfaceFormatKHR>& availableSurfaceFormats) {
-    auto& createInfo = context.vulkanInfo.swapchainCreateInfo;
+    auto& createInfo = CurContext().vulkanInfo.swapchainCreateInfo;
 
     bool formatIsAvailable = false;
     if (!surfaceFormat.format) {
@@ -691,12 +719,12 @@ VkResult _setSurfaceFormat(
     if (!formatIsAvailable)
         return VK_ERROR_FORMAT_NOT_SUPPORTED;
     // 如果交换链已存在，重建交换链
-    if (context.vulkanInfo.swapchain)
+    if (CurContext().vulkanInfo.swapchain)
         return recreateSwapchain();
     return VK_SUCCESS;
 }
 VkResult recreateSwapchain() {
-    auto& info = context.vulkanInfo;
+    auto& info = CurContext().vulkanInfo;
     auto& createInfo = info.swapchainCreateInfo;
     VkSurfaceCapabilitiesKHR surface_capabilities = {};
     VkResult result = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(
@@ -723,7 +751,7 @@ VkResult recreateSwapchain() {
                     int32_t(result));
         return result;
     }
-    _iterateCallback_DestroySwapchain();
+    CurContext().callback_destroySwapchain.iterate();
     for (auto& i : info.swapchainImageViews)
         if (i)
             vkDestroyImageView(info.device, i, nullptr);
@@ -734,7 +762,7 @@ VkResult recreateSwapchain() {
                     "Create swapchain failed! Code:", int32_t(result));
         return result;
     }
-    _iterateCallback_CreateSwapchain();
+    CurContext().callback_createSwapchain.iterate();
     print_log("Info", "Window Resized!");
     return VK_SUCCESS;
 }
@@ -744,20 +772,20 @@ void terminateVulkan() {
     return;
 }
 void waitAll() {
-    auto& info = context.vulkanInfo;
+    auto& info = CurContext().vulkanInfo;
     if (info.device) {
         vkDeviceWaitIdle(info.device);
     }
 }
 void _destroyHandles() {
-    auto& info = context.vulkanInfo;
+    auto& info = CurContext().vulkanInfo;
     if (!info.instance)
         return;
     if (info.device) {
         vkDeviceWaitIdle(info.device);
         _terminateVMA();
         if (info.swapchain) {
-            _iterateCallback_DestroySwapchain();
+            CurContext().callback_destroySwapchain.iterate();
             for (auto& i : info.swapchainImageViews)
                 if (i)
                     vkDestroyImageView(info.device, i, nullptr);
@@ -780,7 +808,7 @@ void _destroyHandles() {
     vkDestroyInstance(info.instance, nullptr);
 }
 void _clearHandles() {
-    auto& info = context.vulkanInfo;
+    auto& info = CurContext().vulkanInfo;
     info.instance = VK_NULL_HANDLE;
     info.phyDevice = VK_NULL_HANDLE;
     info.device = VK_NULL_HANDLE;
@@ -809,7 +837,7 @@ VmaAllocatorCreateFlags _getVMAflags(const std::vector<const char*>& ext) {
     return flag;
 }
 VkResult _initVMA(VmaAllocatorCreateFlags flag) {
-    auto& info = context.vulkanInfo;
+    auto& info = CurContext().vulkanInfo;
     VmaAllocatorCreateInfo create_info = {};
     create_info.flags = flag;
     create_info.vulkanApiVersion = API_VERSION;
@@ -826,51 +854,8 @@ VkResult _initVMA(VmaAllocatorCreateFlags flag) {
     return VK_SUCCESS;
 }
 void _terminateVMA() {
-    auto& info = context.vulkanInfo;
+    auto& info = CurContext().vulkanInfo;
     vmaDestroyAllocator(info.allocator);
 }
-void _iterateCallback_CreateSwapchain() {
-    for (std::map<int, std::function<void()> >::iterator it =
-             context.callbacks_createSwapchain.begin();
-         it != context.callbacks_createSwapchain.end(); ++it) {
-        (it->second)();
-    }
-}
-void _iterateCallback_DestroySwapchain() {
-    for (std::map<int, std::function<void()> >::iterator it =
-             context.callbacks_destroySwapchain.begin();
-         it != context.callbacks_destroySwapchain.end(); ++it) {
-        (it->second)();
-    }
-}
-int addCallback_CreateSwapchain(std::function<void()> p) {
-    static uint32_t id = 1;
-    context.callbacks_createSwapchain.insert({id, p});
-    return id++;
-}
-int addCallback_DestroySwapchain(std::function<void()> p) {
-    static uint32_t id = 1;
-    context.callbacks_destroySwapchain.insert({id, p});
-    return id++;
-}
-void removeCallback_CreateSwapchain(int id) {
-    if (id == 0)
-        return;
-    auto it = context.callbacks_createSwapchain.find(id);
-    if (it == context.callbacks_createSwapchain.end()) {
-        print_error("Callback", "CreateSwapchain id not found:", id);
-        return;
-    }
-    context.callbacks_createSwapchain.erase(it);
-}
-void removeCallback_DestroySwapchain(int id) {
-    if (id == 0)
-        return;
-    auto it = context.callbacks_destroySwapchain.find(id);
-    if (it == context.callbacks_destroySwapchain.end()) {
-        print_error("Callback", "DestroySwapchain id not found:", id);
-        return;
-    }
-    context.callbacks_destroySwapchain.erase(it);
-}
+
 }  // namespace BL

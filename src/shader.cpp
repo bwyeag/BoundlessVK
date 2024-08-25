@@ -15,7 +15,7 @@ void Shader::create(const std::string& path, VkSpecializationInfo* specInfo) {
     for (uint32_t i = 0; i < info.size(); i++) {
         create_info.codeSize = info[i].length;
         create_info.pCode = info[i].data;
-        VkResult res = vkCreateShaderModule(context.vulkanInfo.device,
+        VkResult res = vkCreateShaderModule(CurContext().vulkanInfo.device,
                                             &create_info, nullptr, &modules[i]);
         if (res != VK_SUCCESS) {
             print_error("Shader", "Shader module create failed! Code:", res);

@@ -77,9 +77,6 @@ void mouse_callback(GLFWwindow* window, double xposIn, double yposIn) {
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {
     camera.process_mouse_scroll(static_cast<float>(yoffset));
 }
-void glfw_error_callback(int error, const char* description) {
-    print_error("GLFW", error, ':', description);
-}
 void check_vk_result(VkResult error) {
     if (error == 0)
         return;
@@ -119,7 +116,7 @@ void initImgui() {
     }
     {
         VkAttachmentDescription attachment = {
-            .format = context.vulkanInfo.swapchainCreateInfo.imageFormat,
+            .format = CurContext().vulkanInfo.swapchainCreateInfo.imageFormat,
             .samples = VK_SAMPLE_COUNT_1_BIT,
             .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
             .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
@@ -151,34 +148,34 @@ void initImgui() {
             .pDependencies = &dependency};
         imgui_renderpass.create(info);
 
-        imgui_framebuffers.resize(context.getSwapChainImageCount());
+        imgui_framebuffers.resize(CurContext().getSwapChainImageCount());
         VkFramebufferCreateInfo framebufferCreateInfo = {
             .renderPass = VkRenderPass(imgui_renderpass),
             .attachmentCount = 1,
-            .width = context.vulkanInfo.swapchainCreateInfo.imageExtent.width,
-            .height = context.vulkanInfo.swapchainCreateInfo.imageExtent.height,
+            .width = CurContext().vulkanInfo.swapchainCreateInfo.imageExtent.width,
+            .height = CurContext().vulkanInfo.swapchainCreateInfo.imageExtent.height,
             .layers = 1};
-        for (size_t i = 0; i < context.getSwapChainImageCount(); i++) {
-            framebufferCreateInfo.pAttachments = &context.vulkanInfo.swapchainImageViews[i];
+        for (size_t i = 0; i < CurContext().getSwapChainImageCount(); i++) {
+            framebufferCreateInfo.pAttachments = &CurContext().vulkanInfo.swapchainImageViews[i];
             imgui_framebuffers[i].create(framebufferCreateInfo);
         }
     }
-    // render_context.cmdBuffer_transfer.begin(
+    // render_CurContext().cmdBuffer_transfer.begin(
     //     VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
-    // ImGui_ImplVulkan_CreateFontsTexture(render_context.cmdBuffer_transfer);
-    // render_context.cmdBuffer_transfer.end();
+    // ImGui_ImplVulkan_CreateFontsTexture(render_CurContext().cmdBuffer_transfer);
+    // render_CurContext().cmdBuffer_transfer.end();
 
-    ImGui_ImplGlfw_InitForVulkan(context.windowInfo.pWindow, true);
+    ImGui_ImplGlfw_InitForVulkan(CurContext().windowInfo.pWindow, true);
     ImGui_ImplVulkan_InitInfo init_info = {
-        .Instance = context.vulkanInfo.instance,
-        .PhysicalDevice = context.vulkanInfo.phyDevice,
-        .Device = context.vulkanInfo.device,
-        .QueueFamily = context.vulkanInfo.queueFamilyIndex_graphics,
-        .Queue = context.vulkanInfo.queue_graphics,
+        .Instance = CurContext().vulkanInfo.instance,
+        .PhysicalDevice = CurContext().vulkanInfo.phyDevice,
+        .Device = CurContext().vulkanInfo.device,
+        .QueueFamily = CurContext().vulkanInfo.queueFamilyIndex_graphics,
+        .Queue = CurContext().vulkanInfo.queue_graphics,
         .DescriptorPool = VkDescriptorPool(imgui_pool),
         .RenderPass = VkRenderPass(imgui_renderpass),
-        .MinImageCount = context.getSwapChainImageCount(),
-        .ImageCount = context.getSwapChainImageCount(),
+        .MinImageCount = CurContext().getSwapChainImageCount(),
+        .ImageCount = CurContext().getSwapChainImageCount(),
         .MSAASamples = VK_SAMPLE_COUNT_1_BIT,
         .PipelineCache = VK_NULL_HANDLE,
         .Subpass = 0,
@@ -187,21 +184,20 @@ void initImgui() {
     ImGui_ImplVulkan_Init(&init_info);
 
     auto Recreate = [] {
-        ImGui_ImplVulkan_SetMinImageCount(context.getSwapChainImageCount());
+        ImGui_ImplVulkan_SetMinImageCount(CurContext().getSwapChainImageCount());
     };
-    imgui_swapchain_recreate = addCallback_CreateSwapchain(Recreate);
+    imgui_swapchain_recreate = CurContext().callback_createSwapchain.insert(Recreate);
 }
 int main() {
-    glfwSetErrorCallback(glfw_error_callback);
     system("chcp 65001");
-    setWindowInit(1200, 900, true);
-    if (!initWindow("Boundless", false, false) || !initVulkan()) {
+    CurContext().setWindowInit(1200, 900, true);
+    if (!CurContext().initWindow("Boundless", false, false) || !initVulkan()) {
         return -1;
     }
-    glfwSetCursorPosCallback(context.windowInfo.pWindow, mouse_callback);
-    glfwSetKeyCallback(context.windowInfo.pWindow, keyboard_callback);
-    glfwSetScrollCallback(context.windowInfo.pWindow, scroll_callback);
-    glfwSetInputMode(context.windowInfo.pWindow, GLFW_CURSOR,
+    CurContext().callback_cursorPos.insert(mouse_callback);
+    CurContext().callback_key.insert(keyboard_callback);
+    CurContext().callback_scroll.insert(scroll_callback);
+    glfwSetInputMode(CurContext().windowInfo.pWindow, GLFW_CURSOR,
                      GLFW_CURSOR_NORMAL);
     initVulkanRenderer(true);
     initDepthAttachment();
@@ -299,12 +295,13 @@ int main() {
 
         renderPipeline.create(&shader, &renderpass_pack, &mesh);
 
-        while (!checkWindowClose()) {
+        while (!CurContext().checkWindowClose()) {
+            updateInfo();
             float currentTime = static_cast<float>(glfwGetTime());
             deltaTime = currentTime - lastTime;
             lastTime = currentTime;
             while (
-                glfwGetWindowAttrib(context.windowInfo.pWindow, GLFW_ICONIFIED))
+                glfwGetWindowAttrib(CurContext().windowInfo.pWindow, GLFW_ICONIFIED))
                 glfwWaitEvents();
 
             uniform_sence_uniform.cameraPosition = camera.Position();
@@ -328,22 +325,21 @@ int main() {
             renderCall(renderPack);
             renderEnd(true);
             renderUIBegin();
-            auto& buf = render_context.cmdBufsUI[render_context.curFrame];
+            auto& buf = render_CurContext().cmdBufsUI[render_CurContext().curFrame];
             imgui_renderpass.cmd_begin(
                 VkCommandBuffer(buf),
-                VkFramebuffer(imgui_framebuffers[render_context.image_index]),
-                {{}, context.vulkanInfo.swapchainCreateInfo.imageExtent});
+                VkFramebuffer(imgui_framebuffers[render_CurContext().image_index]),
+                {{}, CurContext().vulkanInfo.swapchainCreateInfo.imageExtent});
             ImGui_ImplVulkan_RenderDrawData(draw_data, buf);
             imgui_renderpass.cmd_end(buf);
             renderUIEnd();
             renderPresent();
             glfwPollEvents();
-            process_input(context.windowInfo.pWindow);
-            calcFps();
+            process_input(CurContext().windowInfo.pWindow);
         }
         waitAll();
     }
-    removeCallback_CreateSwapchain(imgui_swapchain_recreate);
+    CurContext().callback_createSwapchain.erase(imgui_swapchain_recreate);
     ImGui_ImplVulkan_Shutdown();
     ImGui_ImplGlfw_Shutdown();
     ImGui::DestroyContext();
@@ -354,7 +350,7 @@ int main() {
     destroyDepthAttachment();
     terminateVulkanRenderer();
     terminateVulkan();
-    terminateWindow();
+    CurContext().terminateWindow();
     system("pause");
     return 0;
 }

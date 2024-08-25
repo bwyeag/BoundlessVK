@@ -46,8 +46,8 @@ bool Mesh::load(std::string path, uint32_t baseBinding) {
     src_buf.flush();
     VkBufferCopy copy_info = {
         .srcOffset = 0, .dstOffset = 0, .size = data_ptr->real_size};
-    src_buf.transfer_to_buffer(context.vulkanInfo.queue_graphics,
-                               render_context.cmdBuffer_transfer, indexBuffer,
+    src_buf.transfer_to_buffer(CurContext().vulkanInfo.queue_graphics,
+                               render_CurContext().cmdBuffer_transfer, indexBuffer,
                                &copy_info, 1, VkFence(fence));
     vertexBuffers.resize(loadRanges.size());
     for (size_t i = 0; i < loadRanges.size(); i++) {
@@ -59,8 +59,8 @@ bool Mesh::load(std::string path, uint32_t baseBinding) {
         src_buf.resize(data_ptr->real_size);
         uncompress_data(data_ptr, src_buf.get_pdata());
         src_buf.flush();
-        src_buf.transfer_to_buffer(context.vulkanInfo.queue_graphics,
-                                   render_context.cmdBuffer_transfer,
+        src_buf.transfer_to_buffer(CurContext().vulkanInfo.queue_graphics,
+                                   render_CurContext().cmdBuffer_transfer,
                                    VkBuffer(vertexBuffers[i]), &copy_info, 1, VkFence(fence));
     }
     fence.wait();

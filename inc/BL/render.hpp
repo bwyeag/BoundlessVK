@@ -45,7 +45,7 @@ struct RenderContext {
 struct RenderDataPackBase{
     std::function<void(CommandBuffer&, RenderDataPackBase&, uint32_t)> pRenderFunction;
 };
-extern RenderContext render_context;
+extern RenderContext render_CurContext();
 extern VkExtent2D const& window_size;
 bool initVulkanRenderer(bool UIRender);
 void terminateVulkanRenderer();

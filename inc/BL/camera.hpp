@@ -48,12 +48,12 @@ class Camera_debug {
         if (direction & LOCK) {
             if (_isLocked) {
                 _isLocked = false;
-                glfwSetInputMode(context.windowInfo.pWindow, GLFW_CURSOR,
+                glfwSetInputMode(CurContext().windowInfo.pWindow, GLFW_CURSOR,
                                  GLFW_CURSOR_DISABLED);
                 print_log("Camera Debug", "Camera Unlocked!");
             } else {
                 _isLocked = true;
-                glfwSetInputMode(context.windowInfo.pWindow, GLFW_CURSOR,
+                glfwSetInputMode(CurContext().windowInfo.pWindow, GLFW_CURSOR,
                                  GLFW_CURSOR_NORMAL);
                 print_log("Camera Debug", "Camera Locked!");
             }

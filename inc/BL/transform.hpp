@@ -105,9 +105,9 @@ struct CameraTransform {
         return viewMatrix;
     }
     const mat4f& get_proj_matrix(bool& changed) const {
-        float width = context.vulkanInfo.swapchainCreateInfo.imageExtent.width;
+        float width = CurContext().vulkanInfo.swapchainCreateInfo.imageExtent.width;
         float height =
-            context.vulkanInfo.swapchainCreateInfo.imageExtent.height;
+            CurContext().vulkanInfo.swapchainCreateInfo.imageExtent.height;
         float aspect_new = width / height;
         if (isProjEdited || aspect != aspect_new) {
             aspect = aspect_new;

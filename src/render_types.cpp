@@ -3,7 +3,7 @@ namespace BL {
 #ifdef BL_USE_RNEDER_TYPE_SIMPLE1
 void RenderPassPack_simple1::create() {
     VkAttachmentDescription attachmentDescription = {
-        .format = context.vulkanInfo.swapchainCreateInfo.imageFormat,
+        .format = CurContext().vulkanInfo.swapchainCreateInfo.imageFormat,
         .samples = VK_SAMPLE_COUNT_1_BIT,
         .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
         .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
@@ -33,7 +33,7 @@ void RenderPassPack_simple1::create() {
     renderPass.create(renderPassCreateInfo);
 
     auto CreateFramebuffers = [this] {
-        framebuffers.resize(context.getSwapChainImageCount());
+        framebuffers.resize(CurContext().getSwapChainImageCount());
         VkFramebufferCreateInfo framebufferCreateInfo = {
             .renderPass = renderPass,
             .attachmentCount = 1,
@@ -41,16 +41,16 @@ void RenderPassPack_simple1::create() {
             .height = window_size.height,
             .layers = 1};
         VkImageView attachment;
-        for (size_t i = 0; i < context.getSwapChainImageCount(); i++) {
-            attachment = context.vulkanInfo.swapchainImageViews[i];
+        for (size_t i = 0; i < CurContext().getSwapChainImageCount(); i++) {
+            attachment = CurContext().vulkanInfo.swapchainImageViews[i];
             framebufferCreateInfo.pAttachments = &attachment;
             framebuffers[i].create(framebufferCreateInfo);
         }
     };
     auto DestroyFramebuffers = [this] { framebuffers.clear(); };
     CreateFramebuffers();
-    callback_c_id = addCallback_CreateSwapchain(CreateFramebuffers);
-    callback_d_id = addCallback_DestroySwapchain(DestroyFramebuffers);
+    callback_c_id = CurContext().callback_createSwapchain.insert(CreateFramebuffers);
+    callback_d_id = CurContext().callback_destroySwapchain.insert(DestroyFramebuffers);
 }
 void RenderPipeline_simple1::create(Shader* pShader,
                                     RenderPassPackBase* pRenderPass,
@@ -118,19 +118,19 @@ void RenderPipeline_simple1::create(Shader* pShader,
         layout.~PipelineLayout();
     };
     Create();
-    callback_c_id = addCallback_CreateSwapchain(Create);
-    callback_d_id = addCallback_DestroySwapchain(Destroy);
+    callback_c_id = CurContext().callback_createSwapchain.insert(Create);
+    callback_d_id = CurContext().callback_destroySwapchain.insert(Destroy);
 }
 void render_funct_simple1(CommandBuffer& curBuf,
                           RenderDataPackBase& packBase,
                           uint32_t image_index) {
     RenderDataPack_simple1& packet =
         reinterpret_cast<RenderDataPack_simple1&>(packBase);
-    uint32_t curFrame = render_context.curFrame;
+    uint32_t curFrame = render_CurContext().curFrame;
     VkClearValue clearColor = {.color = {0.1f, 0.1f, 0.1f, 1.0f}};
     packet.pRenderPass->renderPass.cmd_begin(
         curBuf, packet.pRenderPass->framebuffers[image_index],
-        {{}, context.vulkanInfo.swapchainCreateInfo.imageExtent}, &clearColor,
+        {{}, CurContext().vulkanInfo.swapchainCreateInfo.imageExtent}, &clearColor,
         1);
     vkCmdBindPipeline(curBuf, VK_PIPELINE_BIND_POINT_GRAPHICS,
                       VkPipeline(packet.pRenderPipeline->renderPipeline));
@@ -150,7 +150,7 @@ void render_funct_simple1(CommandBuffer& curBuf,
 void RenderPassPack_3d_trans_simple1::create() {
     VkAttachmentDescription attachmentDescriptions[2] = {
         {// 颜色附件
-         .format = context.vulkanInfo.swapchainCreateInfo.imageFormat,
+         .format = CurContext().vulkanInfo.swapchainCreateInfo.imageFormat,
          .samples = VK_SAMPLE_COUNT_1_BIT,
          .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
          .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
@@ -158,13 +158,13 @@ void RenderPassPack_3d_trans_simple1::create() {
          .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
          .finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR},
         {// 深度模板附件
-         .format = render_context.depthFormat,
+         .format = render_CurContext().depthFormat,
          .samples = VK_SAMPLE_COUNT_1_BIT,
-         .loadOp = render_context.depthFormat != VK_FORMAT_S8_UINT
+         .loadOp = render_CurContext().depthFormat != VK_FORMAT_S8_UINT
                        ? VK_ATTACHMENT_LOAD_OP_CLEAR
                        : VK_ATTACHMENT_LOAD_OP_DONT_CARE,
          .storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-         .stencilLoadOp = render_context.depthFormat >= VK_FORMAT_S8_UINT
+         .stencilLoadOp = render_CurContext().depthFormat >= VK_FORMAT_S8_UINT
                               ? VK_ATTACHMENT_LOAD_OP_CLEAR
                               : VK_ATTACHMENT_LOAD_OP_DONT_CARE,
          .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
@@ -194,25 +194,25 @@ void RenderPassPack_3d_trans_simple1::create() {
         .pDependencies = &subpassDependency};
     renderPass.create(renderPassCreateInfo);
     auto Create = [this] {
-        framebuffers.resize(context.getSwapChainImageCount());
+        framebuffers.resize(CurContext().getSwapChainImageCount());
         VkFramebufferCreateInfo framebufferCreateInfo = {
             .renderPass = VkRenderPass(renderPass),
             .attachmentCount = 2,
             .width = window_size.width,
             .height = window_size.height,
             .layers = 1};
-        for (size_t i = 0; i < context.getSwapChainImageCount(); i++) {
+        for (size_t i = 0; i < CurContext().getSwapChainImageCount(); i++) {
             VkImageView attachments[2] = {
-                context.vulkanInfo.swapchainImageViews[i],
-                render_context.depthAttachments[i].get_image_view()};
+                CurContext().vulkanInfo.swapchainImageViews[i],
+                render_CurContext().depthAttachments[i].get_image_view()};
             framebufferCreateInfo.pAttachments = attachments;
             framebuffers[i].create(framebufferCreateInfo);
         }
     };
     auto Destroy = [this] { framebuffers.clear(); };
     Create();
-    callback_c_id = addCallback_CreateSwapchain(Create);
-    callback_d_id = addCallback_DestroySwapchain(Destroy);
+    callback_c_id = CurContext().callback_createSwapchain.insert(Create);
+    callback_d_id = CurContext().callback_destroySwapchain.insert(Destroy);
 }
 void RenderPipeline_3d_trans_simple1::create(
     Shader* shader,
@@ -298,15 +298,15 @@ void RenderPipeline_3d_trans_simple1::create(
         layout.~PipelineLayout();
     };
     Create();
-    callback_c_id = addCallback_CreateSwapchain(Create);
-    callback_d_id = addCallback_DestroySwapchain(Destroy);
+    callback_c_id = CurContext().callback_createSwapchain.insert(Create);
+    callback_d_id = CurContext().callback_destroySwapchain.insert(Destroy);
 }
 void render_funct_3d_trans_simple1(CommandBuffer& curBuf,
                                    RenderDataPackBase& packBase,
                                    uint32_t image_index) {
     RenderDataPack_3d_trans_simple1& packet =
         reinterpret_cast<RenderDataPack_3d_trans_simple1&>(packBase);
-    uint32_t curFrame = render_context.curFrame;
+    uint32_t curFrame = render_CurContext().curFrame;
     VkClearValue clearValues[2] = {{.color = {0.1f, 0.1f, 0.1f, 1.0f}},
                                    {.depthStencil = {1.0f, 0}}};
     packet.pRenderPass->renderPass.cmd_begin(
@@ -337,7 +337,7 @@ void render_funct_3d_trans_simple1(CommandBuffer& curBuf,
 void RenderPassPack_PBR_3d_simple::create() {
     VkAttachmentDescription attachmentDescriptions[2] = {
         {// 颜色附件
-         .format = context.vulkanInfo.swapchainCreateInfo.imageFormat,
+         .format = CurContext().vulkanInfo.swapchainCreateInfo.imageFormat,
          .samples = VK_SAMPLE_COUNT_1_BIT,
          .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
          .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
@@ -345,13 +345,13 @@ void RenderPassPack_PBR_3d_simple::create() {
          .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
          .finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL},
         {// 深度模板附件
-         .format = render_context.depthFormat,
+         .format = render_CurContext().depthFormat,
          .samples = VK_SAMPLE_COUNT_1_BIT,
-         .loadOp = render_context.depthFormat != VK_FORMAT_S8_UINT
+         .loadOp = render_CurContext().depthFormat != VK_FORMAT_S8_UINT
                        ? VK_ATTACHMENT_LOAD_OP_CLEAR
                        : VK_ATTACHMENT_LOAD_OP_DONT_CARE,
          .storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-         .stencilLoadOp = render_context.depthFormat >= VK_FORMAT_S8_UINT
+         .stencilLoadOp = render_CurContext().depthFormat >= VK_FORMAT_S8_UINT
                               ? VK_ATTACHMENT_LOAD_OP_CLEAR
                               : VK_ATTACHMENT_LOAD_OP_DONT_CARE,
          .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
@@ -381,25 +381,25 @@ void RenderPassPack_PBR_3d_simple::create() {
         .pDependencies = &subpassDependency};
     renderPass.create(renderPassCreateInfo);
     auto Create = [this] {
-        framebuffers.resize(context.getSwapChainImageCount());
+        framebuffers.resize(CurContext().getSwapChainImageCount());
         VkFramebufferCreateInfo framebufferCreateInfo = {
             .renderPass = VkRenderPass(renderPass),
             .attachmentCount = 2,
             .width = window_size.width,
             .height = window_size.height,
             .layers = 1};
-        for (size_t i = 0; i < context.getSwapChainImageCount(); i++) {
+        for (size_t i = 0; i < CurContext().getSwapChainImageCount(); i++) {
             VkImageView attachments[2] = {
-                context.vulkanInfo.swapchainImageViews[i],
-                render_context.depthAttachments[i].get_image_view()};
+                CurContext().vulkanInfo.swapchainImageViews[i],
+                render_CurContext().depthAttachments[i].get_image_view()};
             framebufferCreateInfo.pAttachments = attachments;
             framebuffers[i].create(framebufferCreateInfo);
         }
     };
     auto Destroy = [this] { framebuffers.clear(); };
     Create();
-    callback_c_id = addCallback_CreateSwapchain(Create);
-    callback_d_id = addCallback_DestroySwapchain(Destroy);
+    callback_c_id = CurContext().callback_createSwapchain.insert(Create);
+    callback_d_id = CurContext().callback_destroySwapchain.insert(Destroy);
 }
 void RenderPipeline_PBR_3d_simple::create(Shader* shader,
                                           RenderPassPackBase* _renderPassPack,
@@ -500,15 +500,15 @@ void RenderPipeline_PBR_3d_simple::create(Shader* shader,
         layout.~PipelineLayout();
     };
     Create();
-    callback_c_id = addCallback_CreateSwapchain(Create);
-    callback_d_id = addCallback_DestroySwapchain(Destroy);
+    callback_c_id = CurContext().callback_createSwapchain.insert(Create);
+    callback_d_id = CurContext().callback_destroySwapchain.insert(Destroy);
 }
 void render_funct_PBR_3d_simple(CommandBuffer& curBuf,
                                 RenderDataPackBase& packBase,
                                 uint32_t image_index) {
     RenderDataPack_PBR_3d_simple& packet =
         reinterpret_cast<RenderDataPack_PBR_3d_simple&>(packBase);
-    uint32_t curFrame = render_context.curFrame;
+    uint32_t curFrame = render_CurContext().curFrame;
     VkClearValue clearValues[2] = {{.color = {0.1f, 0.1f, 0.1f, 1.0f}},
                                    {.depthStencil = {1.0f, 0}}};
     packet.pRenderPass->renderPass.cmd_begin(

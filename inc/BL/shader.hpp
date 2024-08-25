@@ -31,7 +31,7 @@ class Shader {
     }
     ~Shader() {
         for (uint32_t i = 0; i < modules.size(); i++) {
-            vkDestroyShaderModule(context.vulkanInfo.device, modules[i],
+            vkDestroyShaderModule(CurContext().vulkanInfo.device, modules[i],
                                   nullptr);
         }
     }
