@@ -16,10 +16,7 @@
 #include "BL/ftypes.hpp"
 #include "BL/log.hpp"
 // command:
-// g++ command_program.cpp -ID:\c++programs\BoundlessVK\BoundlessVK\inc
-// -ID:\vulkanSDK\Include
-// -LD:\c++programs\BoundlessVK\BoundlessVK\utility_program -lzlib -lassimp -O3
-// -oBLC
+// g++ command_program.cpp -ID:\c++programs\BoundlessVK\BoundlessVK\inc -ID:\vulkanSDK\Include -LD:\c++programs\BoundlessVK\BoundlessVK\utility_program -lzlib -lassimp -O3 -oBLC
 using namespace BL;
 struct compressed_data {
     uint32_t real_size;
@@ -286,7 +283,7 @@ void createShaderFile(const std::string& save_path,
 void makeModelFile(const std::string& path, const std::string& storePath) {
     Assimp::Importer importer;
     const aiScene* scene =
-        importer.ReadFile(path, aiProcess_Triangulate | aiProcess_FlipUVs);
+        importer.ReadFile(path, aiProcess_Triangulate | aiProcess_FlipUVs | aiProcess_ForceGenNormals);
     if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE ||
         !scene->mRootNode) {
         throw std::runtime_error(importer.GetErrorString());
