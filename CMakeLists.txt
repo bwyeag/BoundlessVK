@@ -1,10 +1,13 @@
 cmake_minimum_required(VERSION 3.20)
-project(Boundless LANGUAGES CXX VERSION 0.0.1)
+# set(CMAKE_CXX_COMPILER "D:\\msys2\\mingw64\\bin\\g++.exe")
+# set(CMAKE_GENERATOR "MinGW Makefiles")
+project(Boundless LANGUAGES CXX VERSION 0.1.0)
 
 set(EXPORT_COMPILE_COMMANDS ON)
 set(ENV{VULKAN_SDK} "D:\\vulkanSDK")
 
-aux_source_directory(./src SRC_FILE)
+# aux_source_directory(./src SRC_FILE)
+set(SRC_FILE ./src/main.cpp ./src/bl_context.cpp ./src/vma.cpp ./src/log.cpp)
 aux_source_directory(./src/imgui IMGUI_FILE)
 add_executable(main ${SRC_FILE} ${IMGUI_FILE})
 

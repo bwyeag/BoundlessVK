@@ -1,7 +1,7 @@
 #ifndef _BOUNDLESS_TRANSFORM_CXX_FILE_
 #define _BOUNDLESS_TRANSFORM_CXX_FILE_
 #include <cmath>
-#include "init.hpp"
+#include "bl_context.hpp"
 #include "math_types.hpp"
 /*
  * 使用右手坐标系，NDC：x:[-1,+1],y:[-1,+1],z:[0,+1]

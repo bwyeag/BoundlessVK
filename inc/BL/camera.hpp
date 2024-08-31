@@ -22,6 +22,7 @@ enum CameraMovement {
 };
 enum CameraProjType { FRUSTUM = 1, ORTHO = 0 };
 class Camera_debug {
+    WindowContext* window;
     CameraTransform transform;
     float moveVelocity;
     float zoomMax, zoomMin;
@@ -37,6 +38,7 @@ class Camera_debug {
     float& NearDist() { return transform.zNear; }
     float& FarDist() { return transform.zFar; }
     float& Fov() { return transform.fov; }
+    void set_window(WindowContext* window) { this->window = window; }
     void set_zoom_range(float m, float M) { zoomMin = m, zoomMax = M; }
     void set_move_velocity(float v) { moveVelocity = v; }
     void set_mouse_sensitivity(float v) { mouseSensitivity = v; }
@@ -128,7 +130,7 @@ class Camera_debug {
             transform.isViewEdited = true;
             angle_axisf rotYaw(-xoffset * mouseSensitivity, Up());
             angle_axisf rotPitch(yoffset * mouseSensitivity, Right());
-            quatf rotation =  rotPitch*rotYaw;
+            quatf rotation = rotPitch * rotYaw;
             Forward() = rotation * Forward();
             Up() = rotation * Up();
             Right() = Forward().cross(Up());

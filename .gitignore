@@ -34,3 +34,4 @@
 build/
 temp.txt
 *.mesh
+utility_program/deprecated/

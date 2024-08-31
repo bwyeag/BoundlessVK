@@ -9,8 +9,6 @@
                 "--build",
                 ".\\build\\"
             ],
-            // "options": {
-            // },
             "problemMatcher": [
                 "$gcc"
             ],
@@ -18,6 +16,13 @@
                 "kind": "build",
                 "isDefault": true
             }
+        },
+        {
+            "type": "cmake",
+            "label": "CMake: 配置",
+            "command": "configure",
+            "problemMatcher": [],
+            "detail": "CMake 模板 配置 任务"
         }
     ]
 }
