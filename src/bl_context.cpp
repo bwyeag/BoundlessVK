@@ -473,45 +473,45 @@ static void _glfw_scroll_callback(GLFWwindow* pWindow,
     WindowContext* cxt = (WindowContext*)glfwGetWindowUserPointer(pWindow);
     cxt->callback_scroll.iterate(pWindow, xoffset, yoffset);
 }
-WindowContext::WindowContext(WindowContext&& other) {
-    pWindow = other.pWindow;
-    pMonitor = other.pMonitor;
-    title = std::move(other.title);
-    lastWidth = other.lastWidth;
-    lastHeight = other.lastHeight;
-    lastPosX = other.lastPosX;
-    lastPosY = other.lastPosY;
-    maxWidth = other.maxWidth;
-    minWidth = other.minWidth;
-    maxHeight = other.maxHeight;
-    minHeight = other.minHeight;
-    currentTime = other.currentTime;
-    deltaTime = other.deltaTime;
-    isFullScreen = other.isFullScreen;
-    isFpsShowed = other.isFpsShowed;
-    deltaFrame = other.deltaFrame;
-    stringBuilder = std::move(other.stringBuilder);
-    lastTime = other.lastTime;
+// WindowContext::WindowContext(WindowContext&& other) {
+//     pWindow = other.pWindow;
+//     pMonitor = other.pMonitor;
+//     title = std::move(other.title);
+//     lastWidth = other.lastWidth;
+//     lastHeight = other.lastHeight;
+//     lastPosX = other.lastPosX;
+//     lastPosY = other.lastPosY;
+//     maxWidth = other.maxWidth;
+//     minWidth = other.minWidth;
+//     maxHeight = other.maxHeight;
+//     minHeight = other.minHeight;
+//     currentTime = other.currentTime;
+//     deltaTime = other.deltaTime;
+//     isFullScreen = other.isFullScreen;
+//     isFpsShowed = other.isFpsShowed;
+//     deltaFrame = other.deltaFrame;
+//     stringBuilder = std::move(other.stringBuilder);
+//     lastTime = other.lastTime;
 
-    callback_createSwapchain = std::move(other.callback_createSwapchain);
-    callback_destroySwapchain = std::move(other.callback_destroySwapchain);
-    callback_cursorPos = std::move(other.callback_cursorPos);
-    callback_key = std::move(other.callback_key);
-    callback_scroll = std::move(other.callback_scroll);
+//     callback_createSwapchain = std::move(other.callback_createSwapchain);
+//     callback_destroySwapchain = std::move(other.callback_destroySwapchain);
+//     callback_cursorPos = std::move(other.callback_cursorPos);
+//     callback_key = std::move(other.callback_key);
+//     callback_scroll = std::move(other.callback_scroll);
 
-    surface = other.surface;
-    swapchain = other.swapchain;
-    swapchainImages = std::move(other.swapchainImages);
-    swapchainImageViews = std::move(other.swapchainImageViews);
-    swapchainCreateInfo = other.swapchainCreateInfo;
+//     surface = other.surface;
+//     swapchain = other.swapchain;
+//     swapchainImages = std::move(other.swapchainImages);
+//     swapchainImageViews = std::move(other.swapchainImageViews);
+//     swapchainCreateInfo = other.swapchainCreateInfo;
 
-    other.pWindow = nullptr;
-    other.pMonitor = nullptr;
-    other.surface = VK_NULL_HANDLE;
-    other.swapchain = VK_NULL_HANDLE;
-    other.swapchainCreateInfo.oldSwapchain = VK_NULL_HANDLE;
-    glfwSetWindowUserPointer(pWindow, this);
-}
+//     other.pWindow = nullptr;
+//     other.pMonitor = nullptr;
+//     other.surface = VK_NULL_HANDLE;
+//     other.swapchain = VK_NULL_HANDLE;
+//     other.swapchainCreateInfo.oldSwapchain = VK_NULL_HANDLE;
+//     glfwSetWindowUserPointer(pWindow, this);
+// }
 bool WindowContext::createWindow(const WindowContextInit* pInit) {
     pMonitor = glfwGetPrimaryMonitor();
     if (pMonitor == nullptr) {

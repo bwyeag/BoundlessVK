@@ -13,6 +13,7 @@
 #include "callback.hpp"
 #include "vk_mem_alloc.h"
 namespace BL {
+const uint32_t MAX_FLIGHT_COUNT = 3;
 struct ContextInstanceInit {
     const char* pAppName = nullptr;
     uint32_t appVersion = 0u;
@@ -57,6 +58,12 @@ struct Context {
     VkDebugUtilsMessengerEXT debugger;
 #endif  // BL_DEBUG
     VmaAllocator allocator;
+
+    Context() = default;
+    Context(const Context&) = delete;
+    Context(Context&& other) = delete;
+    ~Context() {}
+
     bool createInstance(const ContextInstanceInit* pInit);
     bool createDevice(const ContextDeviceInit* pInit);
     void destroyDevice();
@@ -131,8 +138,8 @@ struct WindowContext {
     WindowContext() = default;
     WindowContext(const WindowContextInit* pInit) { createWindow(pInit); }
     WindowContext(const WindowContext&) = delete;
-    WindowContext(WindowContext&& other);
-    ~WindowContext() { destroy(); }
+    // WindowContext(WindowContext&& other);
+    ~WindowContext() {}
     bool createWindow(const WindowContextInit* pInit);
     void update();
     void destroy();

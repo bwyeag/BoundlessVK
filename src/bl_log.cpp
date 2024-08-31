@@ -1,4 +1,4 @@
-#include "log.hpp"
+#include "bl_log.hpp"
 
 namespace BL {
 #if IS_WINDOWS

@@ -2,7 +2,7 @@
 #define BOUNDLESS_TYPES_FILE
 #include <vulkan/vulkan.h>
 #include <cstdint>
-#include "init.hpp"
+#include "bl_context.hpp"
 #include "log.hpp"
 namespace BL {
 /*
@@ -21,21 +21,21 @@ class Fence {
     }
     ~Fence() {
         if (handle)
-            vkDestroyFence(CurContext().vulkanInfo.device, handle, nullptr);
+            vkDestroyFence(CurContext().device, handle, nullptr);
         handle = VK_NULL_HANDLE;
     }
     operator VkFence() { return handle; }
     VkFence* getPointer() { return &handle; }
     VkResult wait(uint64_t time = UINT64_MAX) const {
         VkResult result =
-            vkWaitForFences(CurContext().vulkanInfo.device, 1, &handle, false, time);
+            vkWaitForFences(CurContext().device, 1, &handle, false, time);
         if (result)
             print_error("Fence",
                         "Failed to wait for the fence! Code:", int32_t(result));
         return result;
     }
     VkResult reset() const {
-        VkResult result = vkResetFences(CurContext().vulkanInfo.device, 1, &handle);
+        VkResult result = vkResetFences(CurContext().device, 1, &handle);
         if (result)
             print_error("Fence", "Failed to reset for the fence! Code:",
                         int32_t(result));
@@ -47,7 +47,7 @@ class Fence {
         return result;
     }
     VkResult status() const {
-        VkResult result = vkGetFenceStatus(CurContext().vulkanInfo.device, handle);
+        VkResult result = vkGetFenceStatus(CurContext().device, handle);
         if (result <
             0)  // vkGetFenceStatus(...)成功时有两种结果，所以不能仅仅判断result是否非0
             print_error("Fence", "Failed to get the status of the fence! Code:",
@@ -55,7 +55,7 @@ class Fence {
         return result;
     }
     VkResult create(VkFenceCreateInfo& createInfo) {
-        VkResult result = vkCreateFence(CurContext().vulkanInfo.device, &createInfo,
+        VkResult result = vkCreateFence(CurContext().device, &createInfo,
                                         nullptr, &handle);
         if (result)
             print_error("Fence",
@@ -80,13 +80,13 @@ class Semaphore {
     }
     ~Semaphore() {
         if (handle)
-            vkDestroySemaphore(CurContext().vulkanInfo.device, handle, nullptr);
+            vkDestroySemaphore(CurContext().device, handle, nullptr);
         handle = VK_NULL_HANDLE;
     }
     operator VkSemaphore() { return handle; }
     VkSemaphore* getPointer() { return &handle; }
     VkResult create(VkSemaphoreCreateInfo& createInfo) {
-        VkResult result = vkCreateSemaphore(CurContext().vulkanInfo.device,
+        VkResult result = vkCreateSemaphore(CurContext().device,
                                             &createInfo, nullptr, &handle);
         if (result)
             print_error("Semaphore",
@@ -163,7 +163,7 @@ class CommandPool {
     }
     ~CommandPool() {
         if (handle)
-            vkDestroyCommandPool(CurContext().vulkanInfo.device, handle, nullptr);
+            vkDestroyCommandPool(CurContext().device, handle, nullptr);
         handle = VK_NULL_HANDLE;
     }
     operator VkCommandPool() { return handle; }
@@ -177,7 +177,7 @@ class CommandPool {
             .level = level,
             .commandBufferCount = 1};
         VkResult result =
-            vkAllocateCommandBuffers(CurContext().vulkanInfo.device, &allocateInfo,
+            vkAllocateCommandBuffers(CurContext().device, &allocateInfo,
                                      (VkCommandBuffer*)pBuffer);
         if (result) {
             print_error("commandPool", "Failed to allocate", 1,
@@ -195,7 +195,7 @@ class CommandPool {
             .level = level,
             .commandBufferCount = count};
         VkResult result =
-            vkAllocateCommandBuffers(CurContext().vulkanInfo.device, &allocateInfo,
+            vkAllocateCommandBuffers(CurContext().device, &allocateInfo,
                                      (VkCommandBuffer*)pBuffers);
         if (result) {
             print_error("commandPool", "Failed to allocate", count,
@@ -204,18 +204,18 @@ class CommandPool {
         return result;
     }
     void free_buffer(CommandBuffer* pBuffer) const {
-        vkFreeCommandBuffers(CurContext().vulkanInfo.device, handle, 1,
+        vkFreeCommandBuffers(CurContext().device, handle, 1,
                              (VkCommandBuffer*)pBuffer);
         pBuffer->handle = VK_NULL_HANDLE;
     }
     void free_buffers(CommandBuffer* pBuffers, uint32_t count) const {
-        vkFreeCommandBuffers(CurContext().vulkanInfo.device, handle, count,
+        vkFreeCommandBuffers(CurContext().device, handle, count,
                              (VkCommandBuffer*)pBuffers);
         std::memset((void*)pBuffers, 0, sizeof(VkCommandBuffer) * count);
     }
     VkResult create(VkCommandPoolCreateInfo& createInfo) {
         createInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-        VkResult result = vkCreateCommandPool(CurContext().vulkanInfo.device,
+        VkResult result = vkCreateCommandPool(CurContext().device,
                                               &createInfo, nullptr, &handle);
         if (result) {
             print_error("commandPool", "Failed to create a command pool! Code:",
@@ -242,7 +242,7 @@ class RenderPass {
     }
     ~RenderPass() {
         if (handle)
-            vkDestroyRenderPass(CurContext().vulkanInfo.device, handle, nullptr);
+            vkDestroyRenderPass(CurContext().device, handle, nullptr);
         handle = VK_NULL_HANDLE;
     }
     operator VkRenderPass() { return handle; }
@@ -279,7 +279,7 @@ class RenderPass {
     void cmd_end(VkCommandBuffer cmdBuf) const { vkCmdEndRenderPass(cmdBuf); }
     VkResult create(VkRenderPassCreateInfo& createInfo) {
         createInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-        VkResult result = vkCreateRenderPass(CurContext().vulkanInfo.device,
+        VkResult result = vkCreateRenderPass(CurContext().device,
                                              &createInfo, nullptr, &handle);
         if (result) {
             print_error("renderPass", "Failed to create a render pass! Code:",
@@ -300,14 +300,14 @@ class Framebuffer {
     }
     ~Framebuffer() {
         if (handle)
-            vkDestroyFramebuffer(CurContext().vulkanInfo.device, handle, nullptr);
+            vkDestroyFramebuffer(CurContext().device, handle, nullptr);
         handle = VK_NULL_HANDLE;
     }
     operator VkFramebuffer() { return handle; }
     VkFramebuffer* getPointer() { return &handle; }
     VkResult create(VkFramebufferCreateInfo& createInfo) {
         createInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-        VkResult result = vkCreateFramebuffer(CurContext().vulkanInfo.device,
+        VkResult result = vkCreateFramebuffer(CurContext().device,
                                               &createInfo, nullptr, &handle);
         if (result)
             print_error("framebuffer", "Failed to create a framebuffer Code:",
@@ -442,14 +442,14 @@ class PipelineLayout {
     }
     ~PipelineLayout() {
         if (handle)
-            vkDestroyPipelineLayout(CurContext().vulkanInfo.device, handle, nullptr);
+            vkDestroyPipelineLayout(CurContext().device, handle, nullptr);
         handle = VK_NULL_HANDLE;
     }
     operator VkPipelineLayout() { return handle; }
     VkPipelineLayout* getPointer() { return &handle; }
 
     VkResult create(VkPipelineLayoutCreateInfo& createInfo) {
-        VkResult result = vkCreatePipelineLayout(CurContext().vulkanInfo.device,
+        VkResult result = vkCreatePipelineLayout(CurContext().device,
                                                  &createInfo, nullptr, &handle);
         if (result) {
             print_error(
@@ -471,13 +471,13 @@ class Pipeline {
         other.handle = VK_NULL_HANDLE;
     }
     ~Pipeline() {
-        vkDestroyPipeline(CurContext().vulkanInfo.device, handle, nullptr);
+        vkDestroyPipeline(CurContext().device, handle, nullptr);
     }
     operator VkPipeline() { return handle; }
     VkPipeline* getPointer() { return &handle; }
     VkResult create(VkGraphicsPipelineCreateInfo& createInfo) {
         VkResult result =
-            vkCreateGraphicsPipelines(CurContext().vulkanInfo.device, VK_NULL_HANDLE,
+            vkCreateGraphicsPipelines(CurContext().device, VK_NULL_HANDLE,
                                       1, &createInfo, nullptr, &handle);
         if (result) {
             print_error(
@@ -488,7 +488,7 @@ class Pipeline {
     }
     VkResult create(VkComputePipelineCreateInfo& createInfo) {
         VkResult result =
-            vkCreateComputePipelines(CurContext().vulkanInfo.device, VK_NULL_HANDLE,
+            vkCreateComputePipelines(CurContext().device, VK_NULL_HANDLE,
                                      1, &createInfo, nullptr, &handle);
         if (result) {
             print_error(
@@ -528,7 +528,7 @@ class Buffer {
     operator VmaAllocation() { return allocation; }
     VmaAllocation getAllocation() { return allocation; }
     ~Buffer() {
-        vmaDestroyBuffer(CurContext().vulkanInfo.allocator, handle, allocation);
+        vmaDestroyBuffer(CurContext().allocator, handle, allocation);
         handle = VK_NULL_HANDLE;
         allocation = VK_NULL_HANDLE;
     }
@@ -536,7 +536,7 @@ class Buffer {
                            VkDeviceSize length,
                            VkDeviceSize offset = 0) {
         VkResult result = vmaCopyMemoryToAllocation(
-            CurContext().vulkanInfo.allocator, pData, allocation, offset, length);
+            CurContext().allocator, pData, allocation, offset, length);
         if (result) {
             print_error("Buffer",
                         "transfer_data() failed! Code:", int32_t(result));
@@ -547,7 +547,7 @@ class Buffer {
                            VkDeviceSize length,
                            VkDeviceSize offset = 0) {
         VkResult result = vmaCopyAllocationToMemory(
-            CurContext().vulkanInfo.allocator, allocation, offset, pData, length);
+            CurContext().allocator, allocation, offset, pData, length);
         if (result) {
             print_error("Buffer",
                         "retrieve_data() failed! Code:", int32_t(result));
@@ -557,18 +557,18 @@ class Buffer {
     void* map_data() {
         void* data = nullptr;
         VkResult result =
-            vmaMapMemory(CurContext().vulkanInfo.allocator, allocation, &data);
+            vmaMapMemory(CurContext().allocator, allocation, &data);
         if (result) {
             print_error("Buffer", "map_data() failed! Code:", int32_t(result));
         }
         return data;
     }
     void unmap_data() {
-        vmaUnmapMemory(CurContext().vulkanInfo.allocator, allocation);
+        vmaUnmapMemory(CurContext().allocator, allocation);
     }
     VkResult flush_data(VkDeviceSize offset = 0,
                         VkDeviceSize length = VK_WHOLE_SIZE) {
-        VkResult result = vmaFlushAllocation(CurContext().vulkanInfo.allocator,
+        VkResult result = vmaFlushAllocation(CurContext().allocator,
                                              allocation, offset, length);
         if (result) {
             print_error("Buffer",
@@ -578,7 +578,7 @@ class Buffer {
     }
     VkResult invalidate_data(VkDeviceSize offset = 0,
                              VkDeviceSize length = VK_WHOLE_SIZE) {
-        VkResult result = vmaInvalidateAllocation(CurContext().vulkanInfo.allocator,
+        VkResult result = vmaInvalidateAllocation(CurContext().allocator,
                                                   allocation, offset, length);
         if (result) {
             print_error("Buffer",
@@ -589,7 +589,7 @@ class Buffer {
     VkResult allocate(VkBufferCreateInfo& createInfo,
                       VmaAllocationCreateInfo& allocInfo) {
         VkResult result =
-            vmaCreateBuffer(CurContext().vulkanInfo.allocator, &createInfo,
+            vmaCreateBuffer(CurContext().allocator, &createInfo,
                             &allocInfo, &handle, &allocation, nullptr);
         if (result) {
             print_error("Buffer",
@@ -616,7 +616,7 @@ class Buffer {
 };
 inline VkDeviceSize calculate_block_alignment(VkDeviceSize size) {
     static const VkDeviceSize uniformAlignment =
-        CurContext().vulkanInfo.phyDeviceProperties.properties.limits
+        CurContext().phyDeviceProperties.properties.limits
             .minUniformBufferOffsetAlignment;
     return ((uniformAlignment + size - 1) & ~(uniformAlignment - 1));
 }
@@ -696,7 +696,7 @@ class TransferBuffer : protected Buffer {
         if (bufferSize >= new_size)
             return VK_SUCCESS;
         else {
-            vmaDestroyBuffer(CurContext().vulkanInfo.allocator, handle, allocation);
+            vmaDestroyBuffer(CurContext().allocator, handle, allocation);
             return create(new_size, flags, other_usage, sharing_mode);
         }
     }
@@ -765,7 +765,7 @@ class TransferBuffer : protected Buffer {
                 VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT,
             VMA_MEMORY_USAGE_AUTO_PREFER_HOST, sharing_mode);
         VmaAllocationInfo allocInfo;
-        vmaGetAllocationInfo(CurContext().vulkanInfo.allocator, allocation,
+        vmaGetAllocationInfo(CurContext().allocator, allocation,
                              &allocInfo);
         pBufferData = allocInfo.pMappedData;
         bufferSize = allocInfo.size;
@@ -825,7 +825,7 @@ class UniformBuffer : protected Buffer {
                 VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT,
             VMA_MEMORY_USAGE_AUTO, sharing_mode);
         VmaAllocationInfo allocInfo;
-        vmaGetAllocationInfo(CurContext().vulkanInfo.allocator, allocation,
+        vmaGetAllocationInfo(CurContext().allocator, allocation,
                              &allocInfo);
         pBufferData = allocInfo.pMappedData;
         return result;
@@ -849,13 +849,13 @@ class BufferView {
     }
     ~BufferView() {
         if (handle)
-            vkDestroyBufferView(CurContext().vulkanInfo.device, handle, nullptr);
+            vkDestroyBufferView(CurContext().device, handle, nullptr);
         handle = VK_NULL_HANDLE;
     }
     operator VkBufferView() { return handle; }
     VkBufferView* getPointer() { return &handle; }
     VkResult create(VkBufferViewCreateInfo& createInfo) {
-        VkResult result = vkCreateBufferView(CurContext().vulkanInfo.device,
+        VkResult result = vkCreateBufferView(CurContext().device,
                                              &createInfo, nullptr, &handle);
         if (result)
             print_error("BufferView", "Failed to create a buffer view! Code:",
@@ -893,7 +893,7 @@ class Image {
         other.allocation = VK_NULL_HANDLE;
     }
     ~Image() {
-        vmaDestroyImage(CurContext().vulkanInfo.allocator, handle, allocation);
+        vmaDestroyImage(CurContext().allocator, handle, allocation);
         handle = VK_NULL_HANDLE;
         allocation = VK_NULL_HANDLE;
     }
@@ -904,7 +904,7 @@ class Image {
     VkResult create(VkImageCreateInfo& createInfo,
                     VmaAllocationCreateInfo& allocInfo) {
         VkResult result =
-            vmaCreateImage(CurContext().vulkanInfo.allocator, &createInfo,
+            vmaCreateImage(CurContext().allocator, &createInfo,
                            &allocInfo, &handle, &allocation, nullptr);
         if (result)
             print_error("image",
@@ -931,13 +931,13 @@ class ImageView {
     }
     ~ImageView() {
         if (handle)
-            vkDestroyImageView(CurContext().vulkanInfo.device, handle, nullptr);
+            vkDestroyImageView(CurContext().device, handle, nullptr);
         handle = VK_NULL_HANDLE;
     }
     operator VkImageView() { return handle; }
     VkImageView* getPointer() { return &handle; }
     VkResult allocate(VkImageViewCreateInfo& createInfo) {
-        VkResult result = vkCreateImageView(CurContext().vulkanInfo.device,
+        VkResult result = vkCreateImageView(CurContext().device,
                                             &createInfo, nullptr, &handle);
         if (result)
             print_error("ImageView",
@@ -973,13 +973,13 @@ class Sampler {
     }
     ~Sampler() {
         if (handle)
-            vkDestroySampler(CurContext().vulkanInfo.device, handle, nullptr);
+            vkDestroySampler(CurContext().device, handle, nullptr);
         handle = VK_NULL_HANDLE;
     }
     operator VkSampler() { return handle; }
     VkSampler* getPointer() { return &handle; }
     VkResult create(VkSamplerCreateInfo& createInfo) {
-        VkResult result = vkCreateSampler(CurContext().vulkanInfo.device,
+        VkResult result = vkCreateSampler(CurContext().device,
                                           &createInfo, nullptr, &handle);
         if (result) {
             print_error("Sampler",
@@ -1002,7 +1002,7 @@ class DescriptorSetLayout {
     }
     ~DescriptorSetLayout() {
         if (handle)
-            vkDestroyDescriptorSetLayout(CurContext().vulkanInfo.device, handle,
+            vkDestroyDescriptorSetLayout(CurContext().device, handle,
                                          nullptr);
         handle = VK_NULL_HANDLE;
     }
@@ -1010,7 +1010,7 @@ class DescriptorSetLayout {
     VkDescriptorSetLayout* getPointer() { return &handle; }
     VkResult create(VkDescriptorSetLayoutCreateInfo& createInfo) {
         VkResult result = vkCreateDescriptorSetLayout(
-            CurContext().vulkanInfo.device, &createInfo, nullptr, &handle);
+            CurContext().device, &createInfo, nullptr, &handle);
         if (result)
             print_error("DescriptorSetLayout",
                         "Failed to create a descriptor set layout! Code:",
@@ -1076,16 +1076,16 @@ class DescriptorSet {
         update(&writeDescriptorSet);
     }
     static void update(VkWriteDescriptorSet* write) {
-        vkUpdateDescriptorSets(CurContext().vulkanInfo.device, 1, write, 0, nullptr);
+        vkUpdateDescriptorSets(CurContext().device, 1, write, 0, nullptr);
     }
     static void update(VkWriteDescriptorSet* write, VkCopyDescriptorSet* copy) {
-        vkUpdateDescriptorSets(CurContext().vulkanInfo.device, 1, write, 1, copy);
+        vkUpdateDescriptorSets(CurContext().device, 1, write, 1, copy);
     }
     static void update(uint32_t writeCount,
                        VkWriteDescriptorSet* writes,
                        uint32_t copiesCount = 0,
                        VkCopyDescriptorSet* copies = nullptr) {
-        vkUpdateDescriptorSets(CurContext().vulkanInfo.device, writeCount, writes,
+        vkUpdateDescriptorSets(CurContext().device, writeCount, writes,
                                copiesCount, copies);
     }
 };
@@ -1109,7 +1109,7 @@ class DescriptorPool {
     }
     ~DescriptorPool() {
         if (handle) {
-            vkDestroyDescriptorPool(CurContext().vulkanInfo.device, handle, nullptr);
+            vkDestroyDescriptorPool(CurContext().device, handle, nullptr);
         }
         handle = VK_NULL_HANDLE;
     }
@@ -1125,7 +1125,7 @@ class DescriptorPool {
             .descriptorPool = handle,
             .descriptorSetCount = setCount,
             .pSetLayouts = setLayouts};
-        VkResult result = vkAllocateDescriptorSets(CurContext().vulkanInfo.device,
+        VkResult result = vkAllocateDescriptorSets(CurContext().device,
                                                    &allocateInfo, sets);
         if (result) {
             print_error("DescriptorPool",
@@ -1136,13 +1136,13 @@ class DescriptorPool {
         return result;
     }
     VkResult free_sets(uint32_t setCount, VkDescriptorSet* sets) const {
-        VkResult result = vkFreeDescriptorSets(CurContext().vulkanInfo.device,
+        VkResult result = vkFreeDescriptorSets(CurContext().device,
                                                handle, setCount, sets);
         memset(sets, 0, setCount * sizeof(VkDescriptorSet));
         return result;
     }
     VkResult create(const VkDescriptorPoolCreateInfo& createInfo) {
-        VkResult result = vkCreateDescriptorPool(CurContext().vulkanInfo.device,
+        VkResult result = vkCreateDescriptorPool(CurContext().device,
                                                  &createInfo, nullptr, &handle);
         if (result)
             print_error("DescriptorPool",
@@ -1182,7 +1182,7 @@ class QueryPool {
     }
     ~QueryPool() {
         if (handle)
-            vkDestroyQueryPool(CurContext().vulkanInfo.device, handle, nullptr);
+            vkDestroyQueryPool(CurContext().device, handle, nullptr);
         handle = VK_NULL_HANDLE;
     }
     operator VkQueryPool() { return handle; }
@@ -1222,7 +1222,7 @@ class QueryPool {
                          VkDeviceSize stride,
                          VkQueryResultFlags flags = 0) const {
         VkResult result = vkGetQueryPoolResults(
-            CurContext().vulkanInfo.device, handle, firstQueryIndex, queryCount,
+            CurContext().device, handle, firstQueryIndex, queryCount,
             dataSize, pData_dst, stride, flags);
         if (result)
             result > 0
@@ -1235,11 +1235,11 @@ class QueryPool {
         return result;
     }
     void reset(uint32_t firstQueryIndex, uint32_t queryCount) {
-        vkResetQueryPool(CurContext().vulkanInfo.device, handle, firstQueryIndex,
+        vkResetQueryPool(CurContext().device, handle, firstQueryIndex,
                          queryCount);
     }
     VkResult create(VkQueryPoolCreateInfo& createInfo) {
-        VkResult result = vkCreateQueryPool(CurContext().vulkanInfo.device,
+        VkResult result = vkCreateQueryPool(CurContext().device,
                                             &createInfo, nullptr, &handle);
         if (result)
             print_error("QueryPool", "Failed to create a query pool! Code:",
@@ -1326,7 +1326,7 @@ class Event {
     }
     ~Event() {
         if (handle)
-            vkDestroyEvent(CurContext().vulkanInfo.device, handle, nullptr);
+            vkDestroyEvent(CurContext().device, handle, nullptr);
         handle = VK_NULL_HANDLE;
     }
     operator VkEvent() { return handle; }
@@ -1354,21 +1354,21 @@ class Event {
                         imageMemoryBarrierCount, imageMemoryBarriers);
     }
     VkResult set() const {
-        VkResult result = vkSetEvent(CurContext().vulkanInfo.device, handle);
+        VkResult result = vkSetEvent(CurContext().device, handle);
         if (result)
             print_error("Event",
                         "Failed to singal the event! Code:", int32_t(result));
         return result;
     }
     VkResult reset() const {
-        VkResult result = vkResetEvent(CurContext().vulkanInfo.device, handle);
+        VkResult result = vkResetEvent(CurContext().device, handle);
         if (result)
             print_error("Event",
                         "Failed to unsingal the event! Code:", int32_t(result));
         return result;
     }
     VkResult status() const {
-        VkResult result = vkGetEventStatus(CurContext().vulkanInfo.device, handle);
+        VkResult result = vkGetEventStatus(CurContext().device, handle);
         if (result < 0)  // vkGetEventStatus(...)成功时有两种结果
             print_error("Event",
                         "Failed to get the status of the "
@@ -1377,7 +1377,7 @@ class Event {
         return result;
     }
     VkResult create(VkEventCreateInfo& createInfo) {
-        VkResult result = vkCreateEvent(CurContext().vulkanInfo.device, &createInfo,
+        VkResult result = vkCreateEvent(CurContext().device, &createInfo,
                                         nullptr, &handle);
         if (result)
             print_error("Event",
