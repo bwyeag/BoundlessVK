@@ -17,6 +17,6 @@ void compress_data(const void* real_data,
                   int compress_level = 8);
 void uncompress_data(const compressed_data* data, void** save);
 void uncompress_data(const compressed_data* data, void* save);
-uint32_t crc32_check(uint32_t crc, const uint8_t* data, uint32_t length);
+uint32_t calcCRC32(uint32_t crc, const uint8_t* data, uint32_t length);
 }  // namespace BL
 #endif  //!_BOUNDLESS_UTILITY_FILE_

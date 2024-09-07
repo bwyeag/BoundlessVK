@@ -3,7 +3,7 @@
 #include <vulkan/vulkan.h>
 #include <cstdint>
 #include "bl_context.hpp"
-#include "log.hpp"
+#include "bl_log.hpp"
 namespace BL {
 /*
  * Vulkan类型封装
@@ -55,8 +55,8 @@ class Fence {
         return result;
     }
     VkResult create(VkFenceCreateInfo& createInfo) {
-        VkResult result = vkCreateFence(CurContext().device, &createInfo,
-                                        nullptr, &handle);
+        VkResult result =
+            vkCreateFence(CurContext().device, &createInfo, nullptr, &handle);
         if (result)
             print_error("Fence",
                         "Failed to create a fence! Code:", int32_t(result));
@@ -86,8 +86,8 @@ class Semaphore {
     operator VkSemaphore() { return handle; }
     VkSemaphore* getPointer() { return &handle; }
     VkResult create(VkSemaphoreCreateInfo& createInfo) {
-        VkResult result = vkCreateSemaphore(CurContext().device,
-                                            &createInfo, nullptr, &handle);
+        VkResult result = vkCreateSemaphore(CurContext().device, &createInfo,
+                                            nullptr, &handle);
         if (result)
             print_error("Semaphore",
                         "Failed to create a semaphore! Code:", int32_t(result));
@@ -176,9 +176,8 @@ class CommandPool {
             .commandPool = handle,
             .level = level,
             .commandBufferCount = 1};
-        VkResult result =
-            vkAllocateCommandBuffers(CurContext().device, &allocateInfo,
-                                     (VkCommandBuffer*)pBuffer);
+        VkResult result = vkAllocateCommandBuffers(
+            CurContext().device, &allocateInfo, (VkCommandBuffer*)pBuffer);
         if (result) {
             print_error("commandPool", "Failed to allocate", 1,
                         "command buffer(s)! Code:", int32_t(result));
@@ -194,9 +193,8 @@ class CommandPool {
             .commandPool = handle,
             .level = level,
             .commandBufferCount = count};
-        VkResult result =
-            vkAllocateCommandBuffers(CurContext().device, &allocateInfo,
-                                     (VkCommandBuffer*)pBuffers);
+        VkResult result = vkAllocateCommandBuffers(
+            CurContext().device, &allocateInfo, (VkCommandBuffer*)pBuffers);
         if (result) {
             print_error("commandPool", "Failed to allocate", count,
                         "command buffer(s)! Code:", int32_t(result));
@@ -215,8 +213,8 @@ class CommandPool {
     }
     VkResult create(VkCommandPoolCreateInfo& createInfo) {
         createInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-        VkResult result = vkCreateCommandPool(CurContext().device,
-                                              &createInfo, nullptr, &handle);
+        VkResult result = vkCreateCommandPool(CurContext().device, &createInfo,
+                                              nullptr, &handle);
         if (result) {
             print_error("commandPool", "Failed to create a command pool! Code:",
                         int32_t(result));
@@ -279,8 +277,8 @@ class RenderPass {
     void cmd_end(VkCommandBuffer cmdBuf) const { vkCmdEndRenderPass(cmdBuf); }
     VkResult create(VkRenderPassCreateInfo& createInfo) {
         createInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-        VkResult result = vkCreateRenderPass(CurContext().device,
-                                             &createInfo, nullptr, &handle);
+        VkResult result = vkCreateRenderPass(CurContext().device, &createInfo,
+                                             nullptr, &handle);
         if (result) {
             print_error("renderPass", "Failed to create a render pass! Code:",
                         int32_t(result));
@@ -307,8 +305,8 @@ class Framebuffer {
     VkFramebuffer* getPointer() { return &handle; }
     VkResult create(VkFramebufferCreateInfo& createInfo) {
         createInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-        VkResult result = vkCreateFramebuffer(CurContext().device,
-                                              &createInfo, nullptr, &handle);
+        VkResult result = vkCreateFramebuffer(CurContext().device, &createInfo,
+                                              nullptr, &handle);
         if (result)
             print_error("framebuffer", "Failed to create a framebuffer Code:",
                         int32_t(result));
@@ -470,15 +468,13 @@ class Pipeline {
         handle = other.handle;
         other.handle = VK_NULL_HANDLE;
     }
-    ~Pipeline() {
-        vkDestroyPipeline(CurContext().device, handle, nullptr);
-    }
+    ~Pipeline() { vkDestroyPipeline(CurContext().device, handle, nullptr); }
     operator VkPipeline() { return handle; }
     VkPipeline* getPointer() { return &handle; }
     VkResult create(VkGraphicsPipelineCreateInfo& createInfo) {
         VkResult result =
-            vkCreateGraphicsPipelines(CurContext().device, VK_NULL_HANDLE,
-                                      1, &createInfo, nullptr, &handle);
+            vkCreateGraphicsPipelines(CurContext().device, VK_NULL_HANDLE, 1,
+                                      &createInfo, nullptr, &handle);
         if (result) {
             print_error(
                 "pipeline",
@@ -488,8 +484,8 @@ class Pipeline {
     }
     VkResult create(VkComputePipelineCreateInfo& createInfo) {
         VkResult result =
-            vkCreateComputePipelines(CurContext().device, VK_NULL_HANDLE,
-                                     1, &createInfo, nullptr, &handle);
+            vkCreateComputePipelines(CurContext().device, VK_NULL_HANDLE, 1,
+                                     &createInfo, nullptr, &handle);
         if (result) {
             print_error(
                 "pipeline",
@@ -563,13 +559,11 @@ class Buffer {
         }
         return data;
     }
-    void unmap_data() {
-        vmaUnmapMemory(CurContext().allocator, allocation);
-    }
+    void unmap_data() { vmaUnmapMemory(CurContext().allocator, allocation); }
     VkResult flush_data(VkDeviceSize offset = 0,
                         VkDeviceSize length = VK_WHOLE_SIZE) {
-        VkResult result = vmaFlushAllocation(CurContext().allocator,
-                                             allocation, offset, length);
+        VkResult result = vmaFlushAllocation(CurContext().allocator, allocation,
+                                             offset, length);
         if (result) {
             print_error("Buffer",
                         "flush_data() failed! Code:", int32_t(result));
@@ -589,8 +583,8 @@ class Buffer {
     VkResult allocate(VkBufferCreateInfo& createInfo,
                       VmaAllocationCreateInfo& allocInfo) {
         VkResult result =
-            vmaCreateBuffer(CurContext().allocator, &createInfo,
-                            &allocInfo, &handle, &allocation, nullptr);
+            vmaCreateBuffer(CurContext().allocator, &createInfo, &allocInfo,
+                            &handle, &allocation, nullptr);
         if (result) {
             print_error("Buffer",
                         "VMA error when create Buffer. Code:", int32_t(result));
@@ -616,7 +610,8 @@ class Buffer {
 };
 inline VkDeviceSize calculate_block_alignment(VkDeviceSize size) {
     static const VkDeviceSize uniformAlignment =
-        CurContext().phyDeviceProperties.properties.limits
+        CurContext()
+            .phyDeviceProperties.properties.limits
             .minUniformBufferOffsetAlignment;
     return ((uniformAlignment + size - 1) & ~(uniformAlignment - 1));
 }
@@ -765,8 +760,7 @@ class TransferBuffer : protected Buffer {
                 VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT,
             VMA_MEMORY_USAGE_AUTO_PREFER_HOST, sharing_mode);
         VmaAllocationInfo allocInfo;
-        vmaGetAllocationInfo(CurContext().allocator, allocation,
-                             &allocInfo);
+        vmaGetAllocationInfo(CurContext().allocator, allocation, &allocInfo);
         pBufferData = allocInfo.pMappedData;
         bufferSize = allocInfo.size;
         return result;
@@ -805,7 +799,7 @@ class UniformBuffer : protected Buffer {
         for (uint32_t i = 0; i < MAX_FLIGHT_NUM; i++) {
             d = i * blockOffset + offset;
             memcpy((uint8_t*)pBufferData + d, pData, size);
-            this->flush_data(d,size);
+            this->flush_data(d, size);
         }
     }
     void* get_pdata() { return pBufferData; }
@@ -825,8 +819,7 @@ class UniformBuffer : protected Buffer {
                 VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT,
             VMA_MEMORY_USAGE_AUTO, sharing_mode);
         VmaAllocationInfo allocInfo;
-        vmaGetAllocationInfo(CurContext().allocator, allocation,
-                             &allocInfo);
+        vmaGetAllocationInfo(CurContext().allocator, allocation, &allocInfo);
         pBufferData = allocInfo.pMappedData;
         return result;
     }
@@ -855,8 +848,8 @@ class BufferView {
     operator VkBufferView() { return handle; }
     VkBufferView* getPointer() { return &handle; }
     VkResult create(VkBufferViewCreateInfo& createInfo) {
-        VkResult result = vkCreateBufferView(CurContext().device,
-                                             &createInfo, nullptr, &handle);
+        VkResult result = vkCreateBufferView(CurContext().device, &createInfo,
+                                             nullptr, &handle);
         if (result)
             print_error("BufferView", "Failed to create a buffer view! Code:",
                         int32_t(result));
@@ -904,8 +897,8 @@ class Image {
     VkResult create(VkImageCreateInfo& createInfo,
                     VmaAllocationCreateInfo& allocInfo) {
         VkResult result =
-            vmaCreateImage(CurContext().allocator, &createInfo,
-                           &allocInfo, &handle, &allocation, nullptr);
+            vmaCreateImage(CurContext().allocator, &createInfo, &allocInfo,
+                           &handle, &allocation, nullptr);
         if (result)
             print_error("image",
                         "Failed to create an image! Code:", int32_t(result));
@@ -937,8 +930,8 @@ class ImageView {
     operator VkImageView() { return handle; }
     VkImageView* getPointer() { return &handle; }
     VkResult allocate(VkImageViewCreateInfo& createInfo) {
-        VkResult result = vkCreateImageView(CurContext().device,
-                                            &createInfo, nullptr, &handle);
+        VkResult result = vkCreateImageView(CurContext().device, &createInfo,
+                                            nullptr, &handle);
         if (result)
             print_error("ImageView",
                         "Failed to create an image view! "
@@ -979,8 +972,8 @@ class Sampler {
     operator VkSampler() { return handle; }
     VkSampler* getPointer() { return &handle; }
     VkResult create(VkSamplerCreateInfo& createInfo) {
-        VkResult result = vkCreateSampler(CurContext().device,
-                                          &createInfo, nullptr, &handle);
+        VkResult result =
+            vkCreateSampler(CurContext().device, &createInfo, nullptr, &handle);
         if (result) {
             print_error("Sampler",
                         "Failed to create a Sampler! Code:", int32_t(result));
@@ -1002,8 +995,7 @@ class DescriptorSetLayout {
     }
     ~DescriptorSetLayout() {
         if (handle)
-            vkDestroyDescriptorSetLayout(CurContext().device, handle,
-                                         nullptr);
+            vkDestroyDescriptorSetLayout(CurContext().device, handle, nullptr);
         handle = VK_NULL_HANDLE;
     }
     operator VkDescriptorSetLayout() { return handle; }
@@ -1125,8 +1117,8 @@ class DescriptorPool {
             .descriptorPool = handle,
             .descriptorSetCount = setCount,
             .pSetLayouts = setLayouts};
-        VkResult result = vkAllocateDescriptorSets(CurContext().device,
-                                                   &allocateInfo, sets);
+        VkResult result =
+            vkAllocateDescriptorSets(CurContext().device, &allocateInfo, sets);
         if (result) {
             print_error("DescriptorPool",
                         "Failed to allocate descriptor "
@@ -1136,8 +1128,8 @@ class DescriptorPool {
         return result;
     }
     VkResult free_sets(uint32_t setCount, VkDescriptorSet* sets) const {
-        VkResult result = vkFreeDescriptorSets(CurContext().device,
-                                               handle, setCount, sets);
+        VkResult result =
+            vkFreeDescriptorSets(CurContext().device, handle, setCount, sets);
         memset(sets, 0, setCount * sizeof(VkDescriptorSet));
         return result;
     }
@@ -1222,8 +1214,8 @@ class QueryPool {
                          VkDeviceSize stride,
                          VkQueryResultFlags flags = 0) const {
         VkResult result = vkGetQueryPoolResults(
-            CurContext().device, handle, firstQueryIndex, queryCount,
-            dataSize, pData_dst, stride, flags);
+            CurContext().device, handle, firstQueryIndex, queryCount, dataSize,
+            pData_dst, stride, flags);
         if (result)
             result > 0
                 ?  // 若返回值为VK_NOT_READY，则查询尚未结束，有查询结果尚不可获
@@ -1239,8 +1231,8 @@ class QueryPool {
                          queryCount);
     }
     VkResult create(VkQueryPoolCreateInfo& createInfo) {
-        VkResult result = vkCreateQueryPool(CurContext().device,
-                                            &createInfo, nullptr, &handle);
+        VkResult result = vkCreateQueryPool(CurContext().device, &createInfo,
+                                            nullptr, &handle);
         if (result)
             print_error("QueryPool", "Failed to create a query pool! Code:",
                         int32_t(result));
@@ -1377,8 +1369,8 @@ class Event {
         return result;
     }
     VkResult create(VkEventCreateInfo& createInfo) {
-        VkResult result = vkCreateEvent(CurContext().device, &createInfo,
-                                        nullptr, &handle);
+        VkResult result =
+            vkCreateEvent(CurContext().device, &createInfo, nullptr, &handle);
         if (result)
             print_error("Event",
                         "Failed to create a event! Code:", int32_t(result));

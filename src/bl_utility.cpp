@@ -1,4 +1,4 @@
-#include "utility.hpp"
+#include "bl_utility.hpp"
 
 namespace BL {
 void compress_data(const void* real_data,
@@ -47,7 +47,7 @@ void uncompress_data(const compressed_data* data, void* save) {
         print_error("compress", "Uncompressing failed! Code:", r);
     }
 }
-uint32_t crc32_check(uint32_t crc, const uint8_t* data, uint32_t length) {
+uint32_t calcCRC32(uint32_t crc, const uint8_t* data, uint32_t length) {
     uint32_t ncrc = crc32(crc, (Bytef*)data, (uInt)length);
     return ncrc;
 }

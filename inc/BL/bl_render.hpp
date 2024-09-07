@@ -20,9 +20,7 @@ struct RenderContext {
     bool ownership_transfer;
     uint32_t image_index, maxRenderPassCount, currentRenderPass;
 
-    RenderContext(const RenderContextInit* pInit) {
-        create(pInit);
-    }
+    RenderContext(const RenderContextInit* pInit) { create(pInit); }
     bool create(const RenderContextInit* pInit);
     void destroy();
     void beginRender();
