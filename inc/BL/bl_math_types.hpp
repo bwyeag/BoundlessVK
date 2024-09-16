@@ -1,8 +1,8 @@
 #ifndef _BOUNDLESS_MATH_TYPES_CXX_FILE_
 #define _BOUNDLESS_MATH_TYPES_CXX_FILE_
-#include <Eigen/Core>
+#include <Eigen/Dense>
 #include <Eigen/Geometry>
-
+#include <concepts>
 namespace BL {
 using vec2i = Eigen::Vector2i;
 using vec3i = Eigen::Vector3i;
@@ -33,5 +33,17 @@ using mat4x2d = Eigen::Matrix<double,4,2>;
 using mat4x3d = Eigen::Matrix<double,4,3>;
 using quatf = Eigen::Quaternionf;
 using quatd = Eigen::Quaterniond;
+template<typename T>
+using vec2 = Eigen::Matrix<T, 2, 1>;
+template<typename T>
+using vec3 = Eigen::Matrix<T, 3, 1>;
+template<typename T>
+using vec4 = Eigen::Matrix<T, 4, 1>;
+template<typename T>
+using mat2 = Eigen::Matrix<T, 2, 2>;
+template<typename T>
+using mat3 = Eigen::Matrix<T, 3, 3>;
+template<typename T>
+using mat4 = Eigen::Matrix<T, 4, 4>;
 } // namespace BL
 #endif //!_BOUNDLESS_MATH_TYPES_CXX_FILE_

@@ -1,7 +1,7 @@
 #ifndef _BOUNDLESS_INTERSECT_CXX_FILE_
 #define _BOUNDLESS_INTERSECT_CXX_FILE_
 #include <limits>
-#include "math_types.hpp"
+#include "bl_math_types.hpp"
 namespace BL {
 const float ϵ = 1e-20;
 bool intersect_ray_sphere(const vec3f& o,
