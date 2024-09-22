@@ -62,13 +62,13 @@ std::ostream& operator<<(std::ostream& os, ConsoleBackgroundColor data);
 
 inline void print_source_loc(std::ostream& stm,
                              const std::source_location& loc) {
-    stm << '[' << loc.file_name() << "::" << loc.function_name()
-        << "::" << loc.line() << ']';
+    stm << '[' << loc.file_name() << "->" << loc.function_name()
+        << "|L:" << loc.line() << ']';
 }
 inline void print_time(std::ostream& stm) {
     auto now = std::chrono::system_clock::now();
-    std::chrono::duration<uint64_t, std::chrono::milliseconds> now_ms =
-        std::chrono::duration_cast<uint64_t, std::chrono::milliseconds>(
+    auto now_ms =
+        std::chrono::duration_cast<std::chrono::milliseconds>(
             now.time_since_epoch());
     std::time_t t = std::chrono::system_clock::to_time_t(now);
     stm << '[';

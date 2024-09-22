@@ -110,70 +110,70 @@ class FileReader {
     }
 };
 class FileWriter {
-    std::ofstream _file;
-    std::vector<uint8_t> _temp;
+    std::ofstream file;
+    std::vector<uint8_t> temp;
     uint32_t crc32 = (~0u);
     uint32_t curEof = 0;
 
    public:
     FileWriter() = default;
     FileWriter(std::string path, uint32_t head, uint32_t type) {
-        _file.open(path, std::ios::binary | std::ios::trunc);
-        if (!_file.is_open())
+        file.open(path, std::ios::binary | std::ios::trunc);
+        if (!file.is_open())
             print_error("FileWriter", "Could not open file:", path);
         HeadBlock h{.head = head, .type = type};
-        _file.write((char*)h, sizeof(h));
+        file.write((char*)h, sizeof(h));
         curEof += sizeof(h);
-        if (_file.bad())
+        if (file.bad())
             print_error("FileWriter", "Write Error!");
     }
     FileWriter(const FileWriter&) = delete;
-    FileWriter(FileWriter&& other) { _file = std::move(other._file); }
+    FileWriter(FileWriter&& other) { file = std::move(other.file); }
     void flush() {
-        curEof += _temp.size();
-        crc32 = calcCRC32(crc32, _temp.data(), _temp.size());
-        _file.write((char*)_temp.data(), _temp.size());
-        _temp.clear();
+        curEof += temp.size();
+        crc32 = calcCRC32(crc32, temp.data(), temp.size());
+        file.write((char*)temp.data(), temp.size());
+        temp.clear();
     }
-    void reserve(uint32_t size) { _temp.reserve(size); }
+    void reserve(uint32_t size) { temp.reserve(size); }
     void close() {
         flush();
-        _file.seekp(2 * sizeof(uint32_t));  // 移动到文件开头头部的CRC32位置
-        _file.write((char*)&crc32, sizeof(crc32));
-        _file.close();
+        file.seekp(2 * sizeof(uint32_t));  // 移动到文件开头头部的CRC32位置
+        file.write((char*)&crc32, sizeof(crc32));
+        file.close();
     }
-    uint32_t tellp() { return curEof + _temp.size(); }
+    uint32_t tellp() { return curEof + temp.size(); }
     template <size_t len>
     void write(const StringBlock<len>* bp) {
-        size_t st = _temp.size();
-        _temp.resize(st + sizeof(*bp));
-        memcpy((void*)_temp.data() + st, (void*)bp, sizeof(*bp));
+        size_t st = temp.size();
+        temp.resize(st + sizeof(*bp));
+        memcpy((void*)temp.data() + st, (void*)bp, sizeof(*bp));
     }
     template <typename T>
     void write(T* bp) {
-        size_t st = _temp.size();
-        _temp.resize(st + sizeof(*bp));
-        memcpy((void*)_temp.data() + st, (void*)bp, sizeof(*bp));
+        size_t st = temp.size();
+        temp.resize(st + sizeof(*bp));
+        memcpy((void*)temp.data() + st, (void*)bp, sizeof(*bp));
     }
     void addRef(ReferenceBlock* bp) {
-        bp->refOffset = _temp.size();
-        _temp.resize(_temp.size() + sizeof(uint32_t) * 2);
+        bp->refOffset = temp.size();
+        temp.resize(temp.size() + sizeof(uint32_t) * 2);
     }
     void write(ReferenceBlock* bp) {
-        memcpy((void*)_temp.data() + bp->refOffset, (void*)bp,
+        memcpy((void*)temp.data() + bp->refOffset, (void*)bp,
                sizeof(uint32_t) * 2);
     }
     void write(const uint8_t* data, uint32_t size, int compress_level = 7) {
         uint32_t allocSize = compressBound(size);
-        size_t st = _temp.size();
-        _temp.resize(st + allocSize);
-        int r = compress2((Bytef*)_temp.data() + st, (uLongf*)&allocSize,
+        size_t st = temp.size();
+        temp.resize(st + allocSize);
+        int r = compress2((Bytef*)temp.data() + st, (uLongf*)&allocSize,
                           (Bytef*)data, (uLong)size, compress_level);
         if (r != Z_OK) {
             print_error("FileWriter", "Compressing failed! Code:", r);
             return;
         }
-        _temp.resize(st + allocSize);
+        temp.resize(st + allocSize);
     }
 };
 }  // namespace BL::File
