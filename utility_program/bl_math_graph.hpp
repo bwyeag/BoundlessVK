@@ -2,7 +2,7 @@
 #define _BOUNDLESS_MATH_GRAPH_FILE_HPP_
 #include <cstdint>
 #include <vector>
-namespace BL::Math {
+namespace BL::Util {
 template <typename T, typename U>
 class DirectedGraphLink {
    public:
@@ -84,5 +84,5 @@ class DirectedGraphLink {
     }
 };
 
-}  // namespace BL::Math
+}  // namespace BL::Util
 #endif  //!_BOUNDLESS_MATH_GRAPH_FILE_HPP_

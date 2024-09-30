@@ -1,48 +1,27 @@
-#ifndef _BOUNDLESS_JSON_HPP_FILE_
-#define _BOUNDLESS_JSON_HPP_FILE_
+#include "bl_JSON.hpp"
 #include <charconv>
 #include <cstdint>
 #include <cstring>
 #include <optional>
 #include <regex>
 #include <sstream>
-#include <string>
-#include <string_view>
-#include <tuple>
-#include <unordered_map>
-#include <variant>
-#include <vector>
-#include "bl_log.hpp"
+
 namespace BL::JSON {
-struct JSONObject;
-using JSONDict = std::unordered_map<std::string, JSONObject>;
-using JSONList = std::vector<JSONObject>;
-struct JSONObject {
-    using DataType = std::variant<std::monostate,  // null
-                                  bool,            // boolean
-                                  int64_t,         // integer
-                                  double,          // floating point number
-                                  std::string,     // string
-                                  JSONList,        // list
-                                  JSONDict         // dictionary
-                                  >;
-    DataType data;
-};
-std::optional<int64_t> tryParseNumInteger(const char* begin, const char* end) {
+std::optional<int64_t> try_parse_integer(const char* begin, const char* end) {
     int64_t val;
     int base, offset, neg = 1;
-    if (*begin == '0') {
-        if (*(begin + 1) == 'b' || *(begin + 1) == 'B')
+    if (begin[0] == '0' && end - begin > 1) {
+        if (begin[1] == 'b' || begin[1] == 'B')
             base = 2, offset = 2;
-        else if (*(begin + 1) == 'x' || *(begin + 1) == 'X')
+        else if (begin[1] == 'x' || begin[1] == 'X')
             base = 16, offset = 2;
         else
             base = 8, offset = 1;
     } else {
         base = 10;
-        if (*begin == '+')
+        if (begin[0] == '+')
             offset = 1;
-        else if (*begin == '-')
+        else if (begin[0] == '-')
             offset = 1, neg = -1;
         else
             offset = 0;
@@ -52,14 +31,14 @@ std::optional<int64_t> tryParseNumInteger(const char* begin, const char* end) {
         return val * neg;
     return std::nullopt;
 }
-std::optional<double> tryParseNumFloat(const char* begin, const char* end) {
+std::optional<double> try_parse_float(const char* begin, const char* end) {
     double val;
     auto res = std::from_chars(begin, end, val);
     if (res.ec == std::errc() && res.ptr == end)
         return val;
     return std::nullopt;
 }
-char unescapedChar(char c) {
+char from_unescaped_char(char c) {
     switch (c) {
         case 'n':
             return '\n';
@@ -77,6 +56,30 @@ char unescapedChar(char c) {
             return '\b';
         case 'a':
             return '\a';
+        default:
+            return c;
+    }
+}
+int to_escaped_char(int c) {
+    switch (c) {
+        case '\\':
+            return '\\' << 8 + '\\';
+        case '\n':
+            return '\\' << 8 + 'n';
+        case '\r':
+            return '\\' << 8 + 'r';
+        case '\0':
+            return '\\' << 8 + '0';
+        case '\t':
+            return '\\' << 8 + 't';
+        case '\v':
+            return '\\' << 8 + 'v';
+        case '\f':
+            return '\\' << 8 + 'f';
+        case '\b':
+            return '\\' << 8 + 'b';
+        case '\a':
+            return '\\' << 8 + 'a';
         default:
             return c;
     }
@@ -103,10 +106,7 @@ std::pair<JSONObject, size_t> parse(std::string_view json) {
             print_error("JSON", "Boolean string error!");
             goto PARSE_FAILED;
         }
-        std::pair<JSONObject, size_t> result{
-            JSONObject{JSONObject::DataType{std::in_place_index<1>, boolean}},
-            i};
-        return result;
+        return {JSONObject{boolean}, i};
     } else if (('0' <= json[0] && json[0] <= '9') || json[0] == '+' ||
                json[0] == '-') {
         static std::regex num_re{
@@ -115,12 +115,12 @@ std::pair<JSONObject, size_t> parse(std::string_view json) {
         if (std::regex_search(json.begin(), json.end(), match, num_re)) {
             std::string str = match.str();
             if (auto num =
-                    tryParseNumInteger(str.data(), str.data() + str.size());
+                    try_parse_integer(str.data(), str.data() + str.size());
                 num.has_value()) {
                 return {JSONObject{*num}, str.size() + i};
             }
             if (auto num =
-                    tryParseNumFloat(str.data(), str.data() + str.size());
+                    try_parse_float(str.data(), str.data() + str.size());
                 num.has_value()) {
                 return {JSONObject{*num}, str.size() + i};
             }
@@ -147,7 +147,7 @@ std::pair<JSONObject, size_t> parse(std::string_view json) {
                     str.push_back(ch);
                 }
             } else if (phase == Escaped) {
-                str.push_back(unescapedChar(ch));
+                str.push_back(from_unescaped_char(ch));
                 phase = Raw;
             }
         }
@@ -165,7 +165,6 @@ std::pair<JSONObject, size_t> parse(std::string_view json) {
             auto [obj, eaten] = parse(json.substr(j));
             if (eaten == 0) {
                 print_error("JSON", "Parse list error!");
-                j = 0, i = 0;
                 break;
             }
             res.push_back(std::move(obj));
@@ -179,7 +178,6 @@ std::pair<JSONObject, size_t> parse(std::string_view json) {
                 break;
             } else {
                 print_error("JSON", "List no devide comma!");
-                j = 0, i = 0;
                 break;
             }
         }
@@ -197,7 +195,6 @@ std::pair<JSONObject, size_t> parse(std::string_view json) {
             auto [keyobj, keyeaten] = parse(json.substr(j));
             if (keyeaten == 0) {
                 print_error("JSON", "Parse dict key error!");
-                j = 0, i = 0;
                 break;
             }
             j += keyeaten;
@@ -207,19 +204,16 @@ std::pair<JSONObject, size_t> parse(std::string_view json) {
                 j++;
             else {
                 print_error("JSON", "Dict no devide colon!");
-                j = 0, i = 0;
                 break;
             }
             std::string* key = std::get_if<std::string>(&keyobj.data);
             if (key == nullptr) {
                 print_error("JSON", "Parse dict key type error!");
-                j = 0, i = 0;
                 break;
             }
             auto [valobj, valeaten] = parse(json.substr(j));
             if (valeaten == 0) {
                 print_error("JSON", "Parse dict value error!");
-                j = 0, i = 0;
                 break;
             }
             j += valeaten;
@@ -233,7 +227,6 @@ std::pair<JSONObject, size_t> parse(std::string_view json) {
                 break;
             } else {
                 print_error("JSON", "Dict no devide comma!");
-                j = 0, i = 0;
                 break;
             }
         }
@@ -244,43 +237,54 @@ PARSE_FAILED:
     return {JSONObject{std::monostate{}}, 0u};
 }
 struct dump_visitor {
-    std::stringstream& stm;
-    void operator()(int64_t val) { stm << val; }
-    void operator()(double val) { stm << val; }
-    void operator()(bool val) { stm << (val ? "true" : "false"); }
-    void operator()(const std::string& val) { stm << '\"' << val << '\"'; }
+    std::stringstream& stream;
+    void operator()(int64_t val) { stream << val; }
+    void operator()(double val) { stream << val; }
+    void operator()(bool val) { stream << (val ? "true" : "false"); }
+    void operator()(const std::string& val) {
+        stream.put('\"');
+        for (size_t i = 0 : i < val.size(); i++) {
+            int ch = to_escaped_char(val[i]);
+            if (ch > 0xFF) {
+                stream.put('\\');
+                stream.put(char(ch & 0xFF));
+            } else {
+                stream.put(val[i]);
+            }
+        }
+        stream.put('\"');
+    }
     void operator()(const JSONList& val) {
-        stm << '[';
-        size_t i = 0;
+        stream.put('[');
+        size_t i;
         for (i = 0; i + 1 < val.size(); i++) {
             std::visit(*this, val[i].data);
-            stm << ',';
+            stream.put(',');
         }
         if (i < val.size())
             std::visit(*this, val[i].data);
-        stm << ']';
+        stream.put(']');
     }
     void operator()(const JSONDict& val) {
-        stm << '{';
+        stream.put('{');
         auto it = val.begin();
         while (true) {
-            stm << '\"' << it->first << '\"' << ':';
+            stream << '\"' << it->first << '\"' << ':';
             std::visit(*this, it->second.data);
             ++it;
             if (it != val.end())
-                stm << ',';
+                stream.put(',');
             else
                 break;
         }
-        stm << '}';
+        stream.put('}');
     }
-    void operator()(std::monostate v) { stm << "Error"; }
+    void operator()(std::monostate v) { stream << "Error"; }
 };
-std::string dump(JSONObject& json) {
+std::string dump(const JSONObject& json) {
     std::stringstream stm;
-    dump_visitor visitor{.stm = stm};
+    dump_visitor visitor{.stream = stm};
     std::visit(visitor, json.data);
     return stm.str();
 }
-}  // namespace BL::JSON
-#endif  //!_BOUNDLESS_JSON_HPP_FILE_
+};  // namespace BL::JSON
