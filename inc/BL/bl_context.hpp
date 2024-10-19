@@ -84,9 +84,10 @@ struct Context {
     std::vector<const char*> _selectDeviceExtensions(
         const std::vector<VkExtensionProperties>& supported_ext);
     VkResult _getQueueFamilyIndices(VkPhysicalDevice physicalDevice,
-                                             const ContextDeviceInit* pInit);
+                                    const ContextDeviceInit* pInit);
     VkResult _selectPhysicalDevice(const ContextDeviceInit* pInit);
-    std::vector<VkExtensionProperties> _getDeviceExtensions(const ContextDeviceInit* pInit);
+    std::vector<VkExtensionProperties> _getDeviceExtensions(
+        const ContextDeviceInit* pInit);
     VkResult _initVMA(const ContextDeviceInit* pInit);
 #ifdef BL_DEBUG
     VkResult _createDebugMessenger();
@@ -137,8 +138,7 @@ struct WindowContext {
 
     WindowContext() = default;
     WindowContext(const WindowContextInit* pInit) { createWindow(pInit); }
-    WindowContext(const WindowContext&) = delete;
-    // WindowContext(WindowContext&& other);
+    WindowContext(WindowContext&&) = delete;
     ~WindowContext() {}
     bool createWindow(const WindowContextInit* pInit);
     void update();
@@ -154,8 +154,7 @@ struct WindowContext {
                              uint32_t minWidth,
                              uint32_t maxHeight,
                              uint32_t minHeight);
-    void setWindowPos(uint32_t x,
-                      uint32_t y) {
+    void setWindowPos(uint32_t x, uint32_t y) {
         glfwSetWindowPos(pWindow, x, y);
     }
     void setWindowSizeAspect();
@@ -177,6 +176,7 @@ struct WindowContext {
     VkResult recreateSwapchain();
 
     VkResult createSwapchain(const WindowContextSwapchainInit* pInit);
+
    private:
     VkResult _createSurface();
     VkResult _getSurfaceFormats(std::vector<VkSurfaceFormatKHR>& formats);
@@ -185,5 +185,5 @@ struct WindowContext {
         std::vector<VkSurfaceFormatKHR>& availableSurfaceFormats);
     VkResult _createSwapChain_Internal();
 };
-}  // namespace BL_ext
+}  // namespace BL
 #endif  //!_BOUNDLESS_CONTEXT_CXX_FILE_

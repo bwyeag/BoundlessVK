@@ -3,6 +3,11 @@
 #include <cstdint>
 #include <vector>
 namespace BL::Graph {
+template<typename T>
+union NoDestructor {
+    T value;
+    ~NoDestructor() {}
+};
 template <typename T, typename U>
 class DirectedGraphLinked {
    public:
@@ -12,12 +17,12 @@ class DirectedGraphLinked {
         Index inEdge, outEdge;
         uint32_t inDegree, outDegree;
         bool null;
-        T data;
+        NoDestructor<T> data;
     };
     struct Edge {
         Index beginNode, endNode;
         Index nextIn, nextOut;
-        U data;
+        NoDestructor<U> data;
     };
 
    private:
@@ -42,7 +47,7 @@ class DirectedGraphLinked {
         node->inDegree = node->outDegree = 0;
         node->inEdge = node->outEdge = NULL_INDEX;
         node->null = false;
-        node->data = std::forward(data);
+        node->data.value = std::forward(data);
         return pos;
     }
     void erase_vertex(Index index) {

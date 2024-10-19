@@ -1,7 +1,9 @@
 #ifndef _BOUNDLESS_RENDER_CXX_FILE_
 #define _BOUNDLESS_RENDER_CXX_FILE_
+#include <new>
 #include "bl_context.hpp"
 namespace BL {
+const uint32_t MAX_FLIGHT_NUM = 3;
 struct RenderContextInit {
     WindowContext* windowContext;
     uint32_t renderPassCount;
@@ -18,7 +20,8 @@ struct RenderContext {
     CommandPool cmdPool_compute;
     CommandPool cmdPool_presentation;
     bool ownership_transfer;
-    uint32_t image_index, maxRenderPassCount, currentRenderPass;
+    uint32_t image_index, maxRenderPassCount, maxImageCount, currentRenderPass,
+        curFrame;
 
     RenderContext(const RenderContextInit* pInit) { create(pInit); }
     bool create(const RenderContextInit* pInit);
